@@ -78,7 +78,7 @@ export default function Navbar({ onSelectAllTasksFilter, viewAllTasks }) {
             </button>
 
             {showProfileDropdown && (
-              <div className="absolute right-0 mt-2 w-80 glass-panel rounded-xl shadow-2xl border border-zinc-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 mt-2 w-80 bg-[#0c0c10] rounded-xl shadow-2xl border border-white/10 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 {/* Header & Add Manager Action */}
                 <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
                   <p className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1">
