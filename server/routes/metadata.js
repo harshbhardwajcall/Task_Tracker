@@ -76,9 +76,17 @@ function logTaskHistory(taskId, userId, userName, action, oldValue, newValue) {
 router.delete('/employees/:id', authenticateUser, (req, res) => {
   const employeeId = req.params.id;
 
-  const emp = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'Employee'").get(employeeId);
+  const emp = db.prepare("SELECT * FROM users WHERE id = ?").get(employeeId);
   if (!emp) {
-    return res.status(404).json({ message: 'Employee not found.' });
+    return res.status(404).json({ message: 'Team member not found.' });
+  }
+
+  // Prevent deleting the only remaining admin if an admin is targeted
+  if (emp.role === 'Admin') {
+    const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'Admin'").get().count;
+    if (adminCount <= 1) {
+      return res.status(400).json({ message: 'Cannot delete the only remaining Administrator account.' });
+    }
   }
 
   // Move all tasks assigned to or created by this employee to the recycle bin (soft delete)
@@ -102,35 +110,37 @@ router.delete('/employees/:id', authenticateUser, (req, res) => {
   db.prepare("DELETE FROM users WHERE id = ?").run(employeeId);
 
   res.json({
-    message: `${emp.title || 'Employee'} ${emp.name} deleted successfully. ${tasksToRecycle.length} associated task(s) moved to the Recycle Bin.`
+    message: `${emp.title || emp.role || 'Team member'} ${emp.name} deleted successfully. ${tasksToRecycle.length} associated task(s) moved to the Recycle Bin.`
   });
 });
 
 // Get comprehensive analytics and performance statistics for a specific employee
 router.get('/employees/:id/analytics', authenticateUser, (req, res) => {
-  const employeeId = req.params.id;
-
+  const empId = req.params.id;
   const emp = db.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, d.name as department_name
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
     WHERE u.id = ?
-  `).get(employeeId);
+  `).get(empId);
 
   if (!emp) {
     return res.status(404).json({ message: 'Employee not found.' });
   }
 
-  // Fetch all tasks assigned to this employee
   const tasks = db.prepare(`
-    SELECT t.*, p.name as project_name, d.name as department_name, u_by.name as assigner_name
+    SELECT
+      t.*,
+      p.name as project_name,
+      d.name as department_name,
+      assigner.name as assigned_by_name
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
     LEFT JOIN departments d ON t.department_id = d.id
-    LEFT JOIN users u_by ON t.assigned_by = u_by.id
-    WHERE t.assigned_to = ? AND t.deleted_at IS NULL
+    LEFT JOIN users assigner ON t.assigned_by = assigner.id
+    WHERE (t.assigned_to = ? OR t.assigned_by = ?) AND t.deleted_at IS NULL
     ORDER BY t.created_at DESC
-  `).all(employeeId);
+  `).all(empId, empId);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -152,8 +162,8 @@ router.get('/employees/:id/analytics', authenticateUser, (req, res) => {
       priorityBreakdown[t.priority]++;
     }
 
-    // Projects
-    const projKey = t.project_name || 'Unassigned';
+    // Project breakdown
+    const projKey = t.project_name || 'General';
     if (!projectMap[projKey]) {
       projectMap[projKey] = { project_name: projKey, total: 0, completed: 0, in_progress: 0 };
     }
@@ -223,9 +233,12 @@ router.get('/departments', authenticateUser, (req, res) => {
       d.*,
       CASE
         WHEN d.name LIKE '%Admin%' OR d.name LIKE '%Management%' OR d.id = 1 THEN
-          (COUNT(CASE WHEN u.role IN ('Employee', 'Intern') THEN 1 END) + (SELECT COUNT(*) FROM users WHERE role = 'Admin'))
+          (
+            COUNT(CASE WHEN u.id IS NOT NULL AND u.role != 'Admin' THEN 1 END) +
+            (SELECT COUNT(*) FROM users WHERE role = 'Admin')
+          )
         ELSE
-          COUNT(CASE WHEN u.role IN ('Employee', 'Intern') THEN 1 END)
+          COUNT(CASE WHEN u.id IS NOT NULL THEN 1 END)
       END as total_users
     FROM departments d
     LEFT JOIN users u ON u.department_id = d.id
