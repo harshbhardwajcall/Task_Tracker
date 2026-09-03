@@ -41,28 +41,26 @@ async function seed() {
   ];
   projects.forEach(p => insertProj.run(p[0], p[1], p[2]));
 
-  console.log('Seeding users...');
+  console.log('Seeding users (Admin & Employees only)...');
   const hashedPassword = await bcrypt.hash('password123', 10);
-  const insertUser = db.prepare('INSERT INTO users (name, email, password, role, department_id) VALUES (?, ?, ?, ?, ?)');
+  const insertUser = db.prepare('INSERT INTO users (name, email, password, role, department_id, title) VALUES (?, ?, ?, ?, ?, ?)');
 
   // Users:
-  // 1: Manager A (Development)
-  // 2: Manager B (Design)
-  // 3: Rahul Sharma (Employee - Development)
-  // 4: Priya Patel (Employee - Design)
-  // 5: Alex Johnson (Employee - Marketing)
-  // 6: Dev Kumar (Employee - Testing)
-  // 7: Sara Smith (Employee - HR)
+  // 1: System Admin (Admin - Management)
+  // 2: Rahul Sharma (Employee - Development)
+  // 3: Priya Patel (Employee - Design)
+  // 4: Alex Johnson (Employee - Marketing)
+  // 5: Dev Kumar (Employee - Testing)
+  // 6: Sara Smith (Employee - HR)
   const users = [
-    ['Manager A', 'manager@company.com', hashedPassword, 'Manager', 1],
-    ['Manager B', 'sarah.m@company.com', hashedPassword, 'Manager', 2],
-    ['Rahul Sharma', 'rahul@company.com', hashedPassword, 'Employee', 1],
-    ['Priya Patel', 'priya@company.com', hashedPassword, 'Employee', 2],
-    ['Alex Johnson', 'alex@company.com', hashedPassword, 'Employee', 3],
-    ['Dev Kumar', 'dev@company.com', hashedPassword, 'Employee', 6],
-    ['Sara Smith', 'sara@company.com', hashedPassword, 'Employee', 4]
+    ['System Admin', 'admin@company.com', hashedPassword, 'Admin', 1, 'Administrator'],
+    ['Rahul Sharma', 'rahul@company.com', hashedPassword, 'Employee', 1, 'Employee'],
+    ['Priya Patel', 'priya@company.com', hashedPassword, 'Employee', 2, 'Employee'],
+    ['Alex Johnson', 'alex@company.com', hashedPassword, 'Employee', 3, 'Employee'],
+    ['Dev Kumar', 'dev@company.com', hashedPassword, 'Employee', 6, 'Employee'],
+    ['Sara Smith', 'sara@company.com', hashedPassword, 'Employee', 4, 'Employee']
   ];
-  users.forEach(u => insertUser.run(u[0], u[1], u[2], u[3], u[4]));
+  users.forEach(u => insertUser.run(u[0], u[1], u[2], u[3], u[4], u[5]));
 
   console.log('Seeding tasks...');
   const insertTask = db.prepare(`
@@ -78,8 +76,8 @@ async function seed() {
       'TASK-0001',
       'Implement Login API',
       'Implement Google OAuth login and JWT authentication endpoints with refresh tokens.',
-      1, // Manager A
-      3, // Rahul
+      1, // System Admin
+      2, // Rahul
       1, // Skillistry
       1, // Development
       '2026-09-01',
@@ -95,8 +93,8 @@ async function seed() {
       'TASK-0002',
       'Create Homepage UI',
       'Design clean, modern UI components for the main dashboard homepage in Figma.',
-      2, // Manager B
-      4, // Priya
+      1, // System Admin
+      3, // Priya
       4, // Design System 3.0
       2, // Design
       '2026-08-25',
@@ -112,8 +110,8 @@ async function seed() {
       'TASK-0003',
       'Prepare Project Documentation',
       'Draft detailed technical design specs and deployment guidelines for Cloud Migration.',
-      1, // Manager A
-      3, // Rahul
+      1, // System Admin
+      2, // Rahul
       2, // Cloud Migration
       1, // Development
       '2026-09-02',
@@ -129,8 +127,8 @@ async function seed() {
       'TASK-0004',
       'Security Vulnerability Audit',
       'Perform security assessment on public API endpoints and database permissions.',
-      1, // Manager A
-      6, // Dev Kumar
+      1, // System Admin
+      5, // Dev Kumar
       5, // Security Audit
       6, // Testing
       '2026-08-20',
@@ -146,8 +144,8 @@ async function seed() {
       'TASK-0005',
       'Mobile App UI Redesign Assets',
       'Create icon set and illustration assets for Mobile App v2 onboarding screen.',
-      2, // Manager B
-      4, // Priya
+      1, // System Admin
+      3, // Priya
       3, // Mobile App v2
       2, // Design
       '2026-09-01',
@@ -166,12 +164,12 @@ async function seed() {
   console.log('Seeding task comments...');
   const insertComment = db.prepare('INSERT INTO task_comments (task_id, user_id, comment, created_at) VALUES (?, ?, ?, ?)');
   const comments = [
-    [1, 3, 'Started working on JWT auth middleware.', '2026-09-02 10:15:00'],
+    [1, 2, 'Started working on JWT auth middleware.', '2026-09-02 10:15:00'],
     [1, 1, 'Looks good. Make sure to set token expiration to 24 hours.', '2026-09-02 11:30:00'],
-    [1, 3, 'OAuth integration is currently being implemented. Testing refresh token expiration flow.', '2026-09-02 14:00:00'],
-    [2, 4, 'Uploaded complete mockup set to Figma.', '2026-08-28 16:20:00'],
-    [2, 2, 'Approved design! Marked as completed.', '2026-08-29 14:30:00'],
-    [4, 6, 'Identified 2 minor vulnerability warnings in open dependencies.', '2026-08-30 09:45:00']
+    [1, 2, 'OAuth integration is currently being implemented. Testing refresh token expiration flow.', '2026-09-02 14:00:00'],
+    [2, 3, 'Uploaded complete mockup set to Figma.', '2026-08-28 16:20:00'],
+    [2, 1, 'Approved design! Marked as completed.', '2026-08-29 14:30:00'],
+    [4, 5, 'Identified 2 minor vulnerability warnings in open dependencies.', '2026-08-30 09:45:00']
   ];
   comments.forEach(c => insertComment.run(...c));
 
@@ -182,19 +180,19 @@ async function seed() {
   `);
 
   const history = [
-    [1, 1, 'Manager A', 'Task Created', null, 'Task assigned to Rahul Sharma', '2026-09-01 09:00:00'],
-    [1, 3, 'Rahul Sharma', 'Status Changed', 'Not Started', 'In Progress', '2026-09-02 10:15:00'],
-    [1, 3, 'Rahul Sharma', 'Added Comment', null, 'OAuth integration is currently being implemented.', '2026-09-02 14:00:00'],
-    [2, 2, 'Manager B', 'Task Created', null, 'Task assigned to Priya Patel', '2026-08-25 10:00:00'],
-    [2, 4, 'Priya Patel', 'Status Changed', 'Not Started', 'In Progress', '2026-08-26 11:00:00'],
-    [2, 4, 'Priya Patel', 'Status Changed', 'In Progress', 'Completed', '2026-08-29 14:30:00'],
-    [4, 1, 'Manager A', 'Task Created', null, 'Task assigned to Dev Kumar', '2026-08-20 09:30:00'],
-    [4, 6, 'Dev Kumar', 'Status Changed', 'Not Started', 'In Progress', '2026-08-22 10:00:00'],
+    [1, 1, 'System Admin', 'Task Created', null, 'Task assigned to Rahul Sharma', '2026-09-01 09:00:00'],
+    [1, 2, 'Rahul Sharma', 'Status Changed', 'Not Started', 'In Progress', '2026-09-02 10:15:00'],
+    [1, 2, 'Rahul Sharma', 'Added Comment', null, 'OAuth integration is currently being implemented.', '2026-09-02 14:00:00'],
+    [2, 1, 'System Admin', 'Task Created', null, 'Task assigned to Priya Patel', '2026-08-25 10:00:00'],
+    [2, 3, 'Priya Patel', 'Status Changed', 'Not Started', 'In Progress', '2026-08-26 11:00:00'],
+    [2, 3, 'Priya Patel', 'Status Changed', 'In Progress', 'Completed', '2026-08-29 14:30:00'],
+    [4, 1, 'System Admin', 'Task Created', null, 'Task assigned to Dev Kumar', '2026-08-20 09:30:00'],
+    [4, 5, 'Dev Kumar', 'Status Changed', 'Not Started', 'In Progress', '2026-08-22 10:00:00'],
     [4, 1, 'System', 'Status Marked Overdue', 'In Progress', 'Overdue', '2026-09-01 00:00:00']
   ];
   history.forEach(h => insertHistory.run(...h));
 
-  console.log('Database successfully seeded!');
+  console.log('Database successfully seeded with Admin and Employees!');
 }
 
 seed().catch(err => {

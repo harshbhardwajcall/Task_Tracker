@@ -47,6 +47,7 @@ export default function FilterBar({
       department_id: '',
       assigned_to: '',
       assigned_by: '',
+      created_by_role: '',
       priority: '',
       status: '',
       date_filter: '',
@@ -67,7 +68,7 @@ export default function FilterBar({
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by Task ID, Title, or description..."
+            placeholder=".......Search by Task ID, Title, or description......"
             value={filters.search}
             onChange={(e) => handleChange('search', e.target.value)}
             className="input-field pl-8 pr-7 py-1.5 text-xs h-8"
@@ -96,7 +97,7 @@ export default function FilterBar({
       </div>
 
       {/* Select Filters Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 lg:grid-cols-7 gap-2">
         {/* Project */}
         <div>
           <select
@@ -119,9 +120,24 @@ export default function FilterBar({
             className="input-field py-1 px-2 text-[11px] h-7.5"
           >
             <option value="">All Departments</option>
-            {departments.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
+            {departments
+              .filter(d => d.name !== 'Admin Tasks' && d.name !== 'Administration')
+              .map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+          </select>
+        </div>
+
+        {/* Task Creator / Generator (Admin vs Employee) */}
+        <div>
+          <select
+            value={filters.created_by_role || ''}
+            onChange={(e) => handleChange('created_by_role', e.target.value)}
+            className="input-field py-1 px-2 text-[11px] h-7.5 font-medium"
+          >
+            <option value="">All Task Creators</option>
+            <option value="ADMIN">⚡ Admin Generated</option>
+            <option value="EMPLOYEE">👤 Employee Generated</option>
           </select>
         </div>
 

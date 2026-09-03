@@ -1,20 +1,46 @@
 const API_BASE = '/api';
 
 export function getActiveUserId() {
-  return localStorage.getItem('active_user_id') || '10';
+  return localStorage.getItem('active_user_id') || '';
 }
 
 export function setActiveUserId(userId) {
   if (userId) {
     localStorage.setItem('active_user_id', String(userId));
+  } else {
+    localStorage.removeItem('active_user_id');
   }
+}
+
+export function getAuthToken() {
+  return localStorage.getItem('auth_token') || '';
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
+  }
+}
+
+export function clearAuth() {
+  localStorage.removeItem('active_user_id');
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('active_user');
 }
 
 async function request(endpoint, options = {}) {
   const activeUserId = getActiveUserId();
+  const token = getAuthToken();
   const headers = { ...options.headers };
 
-  headers['X-User-Id'] = activeUserId;
+  if (activeUserId) {
+    headers['X-User-Id'] = activeUserId;
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   // If body is not FormData, add JSON header
   if (options.body && !(options.body instanceof FormData)) {
@@ -37,16 +63,34 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
-  // Profiles
+  // Authentication & Profiles
+  login: (credentials) => request('/auth/login', {
+    method: 'POST',
+    body: credentials
+  }),
+  getMe: () => request('/auth/me'),
   getUsers: () => request('/auth/users'),
   getUserProfile: (id) => request(`/auth/user/${id}`),
-  createManager: (data) => request('/managers', {
+
+  // Admin User & Credential Management
+  createAdminUser: (data) => request('/auth/admin/users', {
     method: 'POST',
     body: data
   }),
-  deleteManager: (id) => request(`/managers/${id}`, {
+  resetUserPassword: (id, password) => request(`/auth/admin/users/${id}/password`, {
+    method: 'PUT',
+    body: { password }
+  }),
+  updateAdminUser: (id, data) => request(`/auth/admin/users/${id}`, {
+    method: 'PUT',
+    body: data
+  }),
+  deleteAdminUser: (id) => request(`/auth/admin/users/${id}`, {
     method: 'DELETE'
   }),
+
+  // Admin System Stats
+  getAdminStats: () => request('/admin/stats'),
 
   // Tasks
   getTasks: (params = {}) => {
@@ -85,6 +129,9 @@ export const api = {
     method: 'POST',
     body: formData
   }),
+  deleteAttachment: (taskId, attachmentId) => request(`/tasks/${taskId}/attachments/${attachmentId}`, {
+    method: 'DELETE'
+  }),
 
   getTaskHistory: (id) => request(`/tasks/${id}/history`),
   deleteTask: (id) => request(`/tasks/${id}`, { method: 'DELETE' }),
@@ -95,11 +142,12 @@ export const api = {
   deleteTaskPermanently: (id) => request(`/tasks/${id}/permanent`, { method: 'DELETE' }),
   emptyRecycleBin: () => request('/tasks/recycle-bin/empty', { method: 'DELETE' }),
 
-  // Metadata
+  // Employees & Metadata
   getEmployees: () => request('/employees'),
-  createEmployee: (data) => request('/employees', {
+  getEmployeeAnalytics: (id) => request(`/employees/${id}/analytics`),
+  createEmployee: (employeeData) => request('/employees', {
     method: 'POST',
-    body: data
+    body: employeeData
   }),
   deleteEmployee: (id) => request(`/employees/${id}`, {
     method: 'DELETE'
@@ -125,3 +173,4 @@ export const api = {
     return request(`/reports?${query.toString()}`);
   }
 };
+

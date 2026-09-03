@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware configuration
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -53,10 +53,14 @@ if (fs.existsSync(distDir)) {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ message: 'Attachment file size exceeds the 10MB limit.' });
+  }
   console.error('Unhandled Server Error:', err);
-  res.status(500).json({ message: err.message || 'Internal Server Error' });
+  res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Task Tracker API server active on http://localhost:${PORT} (Nullable Due Date Ready)`);
 });
+

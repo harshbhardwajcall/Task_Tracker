@@ -1,12 +1,13 @@
 import React from 'react';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
-import { Eye, Trash2, Calendar, FileText, MessageSquare, Paperclip } from 'lucide-react';
+import { Eye, Trash2, Calendar, FileText, MessageSquare, Paperclip, ShieldCheck, Pencil } from 'lucide-react';
 
 export default function TaskTable({
   tasks = [],
   loading = false,
   onViewTask,
+  onEditTask,
   onDeleteTask,
   isManager = true
 }) {
@@ -39,7 +40,7 @@ export default function TaskTable({
             <tr>
               <th className="py-3.5 px-4">Task ID</th>
               <th className="py-3.5 px-4">Task Title</th>
-              {isManager && <th className="py-3.5 px-4">Assigned By</th>}
+              <th className="py-3.5 px-4">Assigned By</th>
               <th className="py-3.5 px-4">Assigned To</th>
               <th className="py-3.5 px-4">Project</th>
               <th className="py-3.5 px-4">Department</th>
@@ -80,11 +81,18 @@ export default function TaskTable({
                   </div>
                 </td>
 
-                {isManager && (
-                  <td className="py-3.5 px-4 text-slate-300 font-medium">
-                    {task.assigned_by_name}
-                  </td>
-                )}
+                <td className="py-3.5 px-4 font-medium whitespace-nowrap">
+                  {task.assigned_by_role === 'Admin' ? (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{task.assigned_by_name}</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">
+                      {task.assigned_by_name}
+                    </span>
+                  )}
+                </td>
 
                 <td className="py-3.5 px-4 font-medium text-slate-200">
                   <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
@@ -105,8 +113,8 @@ export default function TaskTable({
                 </td>
 
                 <td className="py-3.5 px-4 font-medium whitespace-nowrap">
-                  <span className={task.status === 'Overdue' ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                    {task.due_date}
+                  <span className={task.status === 'Overdue' ? 'text-rose-400 font-bold' : (task.due_date ? 'text-slate-300' : 'text-neutral-500 italic text-[11px]')}>
+                    {task.due_date || 'No Due Date'}
                   </span>
                 </td>
 
@@ -126,16 +134,26 @@ export default function TaskTable({
                   <div className="flex items-center justify-end gap-1.5">
                     <button
                       onClick={() => onViewTask(task)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                      className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-neutral-300 hover:text-white transition cursor-pointer"
                       title="View Details"
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
 
+                    {isManager && onEditTask && (
+                      <button
+                        onClick={() => onEditTask(task)}
+                        className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-white transition cursor-pointer"
+                        title="Edit Task"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     {isManager && (
                       <button
                         onClick={() => onDeleteTask(task)}
-                        className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-400 transition"
+                        className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-400 transition cursor-pointer"
                         title="Delete Task"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
-import { Trash2, RotateCcw, AlertTriangle, Clock, Calendar, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Trash2, RotateCcw, AlertTriangle, Clock, Calendar, CheckCircle2, ShieldAlert, RefreshCw } from 'lucide-react';
 
 export default function RecycleBinView() {
   const [tasks, setTasks] = useState([]);
@@ -101,16 +101,26 @@ export default function RecycleBinView() {
           </p>
         </div>
 
-        {tasks.length > 0 && (
+        <div className="flex items-center gap-2">
+          {tasks.length > 0 && (
+            <button
+              onClick={handleEmptyBin}
+              disabled={actionLoading}
+              className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              <span>Empty Recycle Bin</span>
+            </button>
+          )}
+
           <button
-            onClick={handleEmptyBin}
-            disabled={actionLoading}
-            className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/80 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+            onClick={loadRecycledTasks}
+            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-neutral-300 border border-zinc-750 text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
+            title="Refresh Recycle Bin"
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span>Empty Recycle Bin</span>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-        )}
+        </div>
       </div>
 
       {/* Success Notification Banner */}

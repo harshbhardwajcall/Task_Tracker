@@ -1,19 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
+import Login from './pages/Login';
 import Navbar from './components/Navbar';
 import TopNav from './components/TopNav';
-import ManagerDashboard from './pages/ManagerDashboard';
+import AdminView from './pages/AdminView';
+import AdminSettingsView from './pages/AdminSettingsView';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import DirectoryView from './pages/DirectoryView';
 import RecycleBinView from './pages/RecycleBinView';
+import CreateTaskModal from './components/CreateTaskModal';
 
 export default function App() {
   const { user, loading } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [viewAllTasks, setViewAllTasks] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Sync default tab when user role changes
+  useEffect(() => {
+    setCurrentTab('dashboard');
+  }, [user?.role, user?.id]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -21,7 +28,7 @@ export default function App() {
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-3">
         <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -30,7 +37,12 @@ export default function App() {
     );
   }
 
-  const isManager = user.role === 'Manager';
+  // If no authenticated user, render Login page
+  if (!user) {
+    return <Login />;
+  }
+
+  const isAdmin = user.role === 'Admin';
 
   return (
     <div className="min-h-screen bg-black text-neutral-100 flex flex-col relative overflow-hidden">
@@ -43,74 +55,79 @@ export default function App() {
         />
       </div>
 
-      {/* Top Navbar */}
+      {/* Top Navbar with Profile & Logout */}
       <Navbar
-        viewAllTasks={viewAllTasks}
-        onSelectAllTasksFilter={(val) => setViewAllTasks(val)}
+        onNavigateAdmin={() => setCurrentTab('admin_settings')}
       />
 
-      {/* Horizontal Top Navigation Bar with View Scope Indicator and Refresh Button */}
+      {/* Horizontal Top Navigation Bar */}
       <TopNav
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         onOpenCreateTask={() => setShowCreateModal(true)}
-        viewAllTasks={viewAllTasks}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
 
       {/* Full-Width Main Content Viewport */}
       <main className="flex-1 p-4 lg:p-6 w-full max-w-full overflow-y-auto relative z-10">
+        {/* Dashboard View (Admin Hub for Admin, Personal Dashboard for Employee) */}
         {currentTab === 'dashboard' && (
-          isManager ? (
-            <ManagerDashboard
-              onOpenCreateTask={() => setShowCreateModal(true)}
-              showCreateModal={showCreateModal}
-              setShowCreateModal={setShowCreateModal}
-              viewAllTasks={viewAllTasks}
-              refreshTrigger={refreshTrigger}
-              onTasksLoaded={() => setIsRefreshing(false)}
-            />
+          isAdmin ? (
+            <AdminView key={`dash-admin-${refreshTrigger}`} />
           ) : (
-            <EmployeeDashboard />
+            <EmployeeDashboard key={`dash-emp-${refreshTrigger}`} onOpenCreateTask={() => setShowCreateModal(true)} />
           )
         )}
 
-        {currentTab === 'all_tasks' && (
-          <ManagerDashboard
-            onOpenCreateTask={() => setShowCreateModal(true)}
-            showCreateModal={showCreateModal}
-            setShowCreateModal={setShowCreateModal}
-            viewAllTasks={true}
-            refreshTrigger={refreshTrigger}
-            onTasksLoaded={() => setIsRefreshing(false)}
-          />
+        {/* Dedicated Admin Settings Tab */}
+        {(currentTab === 'admin' || currentTab === 'admin_settings') && isAdmin && (
+          <AdminSettingsView key={`admin-settings-${refreshTrigger}`} />
         )}
 
+        {/* Employee Personal Deliverables: Assigned TO me */}
         {currentTab === 'my_tasks' && (
-          <EmployeeDashboard />
+          <EmployeeDashboard key={`my-${refreshTrigger}`} scope="ASSIGNED_TO_ME" onOpenCreateTask={() => setShowCreateModal(true)} />
         )}
 
+        {/* Employee Delegated Deliverables: Assigned BY me to others */}
+        {currentTab === 'assigned_to_others' && (
+          <EmployeeDashboard key={`assigned-by-${refreshTrigger}`} scope="ASSIGNED_BY_ME" onOpenCreateTask={() => setShowCreateModal(true)} />
+        )}
+
+        {/* Employee Completed Deliverables */}
         {currentTab === 'completed_tasks' && (
-          <EmployeeDashboard filterCompletedOnly={true} />
+          <EmployeeDashboard key={`comp-${refreshTrigger}`} filterCompletedOnly={true} onOpenCreateTask={() => setShowCreateModal(true)} />
         )}
 
-        {currentTab === 'employees' && (
-          <DirectoryView type="employees" />
+        {/* Directory Views (Admin) */}
+        {currentTab === 'employees' && isAdmin && (
+          <DirectoryView key={`emp-${refreshTrigger}`} type="employees" />
         )}
 
-        {currentTab === 'projects' && (
-          <DirectoryView type="projects" />
+        {currentTab === 'projects' && isAdmin && (
+          <DirectoryView key={`proj-${refreshTrigger}`} type="projects" />
         )}
 
-        {currentTab === 'departments' && (
-          <DirectoryView type="departments" />
+        {currentTab === 'departments' && isAdmin && (
+          <DirectoryView key={`dept-${refreshTrigger}`} type="departments" />
         )}
 
-        {currentTab === 'recycle_bin' && (
-          <RecycleBinView />
+        {currentTab === 'recycle_bin' && isAdmin && (
+          <RecycleBinView key={`bin-${refreshTrigger}`} />
         )}
       </main>
+
+      {/* Global Task Creation Modal */}
+      {showCreateModal && (
+        <CreateTaskModal
+          onClose={() => setShowCreateModal(false)}
+          onTaskCreated={() => {
+            handleRefresh();
+            setShowCreateModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import FilterBar from '../components/FilterBar';
 import TaskTable from '../components/TaskTable';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import CreateTaskModal from '../components/CreateTaskModal';
+import EditTaskModal from '../components/EditTaskModal';
 
 export default function ManagerDashboard({
   onOpenCreateTask,
@@ -20,6 +21,7 @@ export default function ManagerDashboard({
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [taskToEdit, setTaskToEdit] = useState(null);
 
   const [employees, setEmployees] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -92,15 +94,6 @@ export default function ManagerDashboard({
 
   return (
     <div className="relative rounded-2xl bg-[#08080a] border border-white/5 p-4 sm:p-5 lg:p-6 shadow-2xl overflow-hidden space-y-5">
-      {/* Manager Section Ambient Background Emblem & Lighting */}
-      <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden select-none">
-        <img
-          src="/Call_Astro_icon.png"
-          alt="Manager Section Background"
-          className="w-[540px] h-[540px] object-contain opacity-15 grayscale-[50%] brightness-75 drop-shadow-2xl"
-        />
-      </div>
-
       <div className="relative z-10 space-y-4">
         {/* Summary Cards */}
         <SummaryCards
@@ -122,7 +115,7 @@ export default function ManagerDashboard({
         {/* Task List Subheader */}
         <div className="flex items-center justify-between pt-1">
           <div className="text-xs font-bold text-neutral-300">
-            Showing <span className="text-white font-mono font-extrabold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800">{tasks.length}</span> Tasks {viewAllTasks ? '(All Managers)' : `assigned by ${user?.name}`}
+            Showing <span className="text-white font-mono font-extrabold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800">{tasks.length}</span> System Tasks
           </div>
         </div>
 
@@ -131,6 +124,7 @@ export default function ManagerDashboard({
           tasks={tasks}
           loading={loading}
           onViewTask={(task) => setSelectedTaskId(task.id)}
+          onEditTask={(task) => setTaskToEdit(task)}
           onDeleteTask={handleDeleteTask}
           isManager={true}
         />
@@ -141,6 +135,18 @@ export default function ManagerDashboard({
             taskId={selectedTaskId}
             onClose={() => setSelectedTaskId(null)}
             onTaskUpdated={fetchTasks}
+          />
+        )}
+
+        {/* Admin Edit Task Modal */}
+        {taskToEdit && (
+          <EditTaskModal
+            task={taskToEdit}
+            onClose={() => setTaskToEdit(null)}
+            onTaskUpdated={() => {
+              fetchTasks();
+              setTaskToEdit(null);
+            }}
           />
         )}
 

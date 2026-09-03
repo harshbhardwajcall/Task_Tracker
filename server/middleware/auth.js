@@ -47,19 +47,20 @@ export function authenticateUser(req, res, next) {
     }
   }
 
-  // Default auto-login user (Manager A) if no auth header passed
+  // Default auto-login user (System Admin or Manager A) if no auth header passed
   const defaultUser = db.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.id = 1
+    WHERE u.role = 'Admin' OR u.id = 1
+    ORDER BY u.role ASC LIMIT 1
   `).get();
 
   req.user = defaultUser || {
     id: 1,
-    name: 'Manager A',
-    email: 'manager@company.com',
-    role: 'Manager',
+    name: 'System Admin',
+    email: 'admin@company.com',
+    role: 'Admin',
     department_id: 1,
     department_name: 'Development'
   };
@@ -72,11 +73,12 @@ export function requireRole(...allowedRoles) {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({
-        message: `Access denied. Requires one of roles: [${allowedRoles.join(', ')}]`
-      });
+    // Admin always has access to all routes
+    if (req.user.role === 'Admin' || allowedRoles.includes(req.user.role)) {
+      return next();
     }
-    next();
+    return res.status(403).json({
+      message: `Access denied. Requires one of roles: [${allowedRoles.join(', ')}]`
+    });
   };
 }

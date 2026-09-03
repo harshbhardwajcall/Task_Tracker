@@ -7,7 +7,7 @@ import { authenticateUser, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// File upload configuration for task attachments
+// File upload configuration for task attachments with 10MB cap
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads');
@@ -25,8 +25,29 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 } // 15 MB limit
+  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB maximum upload limit
 });
+
+// Helper function to safely delete physical attachment files from disk
+function deletePhysicalAttachments(taskIds) {
+  if (!Array.isArray(taskIds) || taskIds.length === 0) return;
+  const placeholders = taskIds.map(() => '?').join(',');
+  const attachments = db.prepare(`SELECT file_path FROM task_attachments WHERE task_id IN (${placeholders})`).all(...taskIds);
+
+  const uploadDir = path.join(process.cwd(), 'uploads');
+  for (const att of attachments) {
+    if (att.file_path) {
+      const filePath = path.isAbsolute(att.file_path) ? att.file_path : path.join(uploadDir, att.file_path);
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (err) {
+        console.error(`Failed to delete physical file ${filePath}:`, err);
+      }
+    }
+  }
+}
 
 // Helper function to dynamically update overdue tasks in DB & audit log
 function syncOverdueStatus() {
@@ -84,8 +105,12 @@ router.get('/', authenticateUser, (req, res) => {
     department_id,
     assigned_to,
     assigned_by,
+    scope, // 'ASSIGNED_TO_ME' | 'ASSIGNED_BY_ME' | 'ALL'
+    created_by_role, // 'ADMIN' | 'EMPLOYEE' | 'ALL'
     priority,
     status,
+    exclude_completed,
+    status_not,
     date_filter,
     from_date,
     to_date,
@@ -98,18 +123,35 @@ router.get('/', authenticateUser, (req, res) => {
   let conditions = ['t.deleted_at IS NULL'];
   let params = [];
 
-  if (req.user.role === 'Employee') {
-    conditions.push('t.assigned_to = ?');
-    params.push(req.user.id);
-  } else if (req.user.role === 'Manager') {
-    if (assigned_by !== 'ALL' && assigned_by !== 'all') {
-      const targetManagerId = assigned_by || req.user.id;
+  if (req.user.role === 'Employee' || req.user.role === 'Intern') {
+    if (scope === 'ASSIGNED_BY_ME' || scope === 'assigned_by_me' || assigned_by === 'ME') {
+      // Show ONLY tasks assigned BY this employee
       conditions.push('t.assigned_by = ?');
-      params.push(targetManagerId);
+      params.push(req.user.id);
+    } else if (scope === 'ASSIGNED_TO_ME' || scope === 'assigned_to_me' || scope === 'MY_TASKS') {
+      // Show ONLY tasks assigned TO this employee
+      conditions.push('t.assigned_to = ?');
+      params.push(req.user.id);
+    } else {
+      // General Dashboard: show tasks assigned TO or BY this employee
+      conditions.push('(t.assigned_to = ? OR t.assigned_by = ?)');
+      params.push(req.user.id, req.user.id);
+    }
+  } else if (req.user.role === 'Admin') {
+    if (assigned_by && assigned_by !== 'ALL' && assigned_by !== 'all') {
+      conditions.push('t.assigned_by = ?');
+      params.push(assigned_by);
     }
   }
 
-  if (assigned_to && req.user.role === 'Manager') {
+  // Filter by Creator Role (Admin Generated vs Employee Generated)
+  if (created_by_role === 'ADMIN' || created_by_role === 'Admin') {
+    conditions.push("assigner.role = 'Admin'");
+  } else if (created_by_role === 'EMPLOYEE' || created_by_role === 'Employee') {
+    conditions.push("assigner.role = 'Employee'");
+  }
+
+  if (assigned_to && req.user.role === 'Admin') {
     conditions.push('t.assigned_to = ?');
     params.push(assigned_to);
   }
@@ -119,7 +161,9 @@ router.get('/', authenticateUser, (req, res) => {
     params.push(project_id);
   }
 
-  if (department_id) {
+  if (department_id === 'ADMIN_TASKS' || department_id === 'ADMIN') {
+    conditions.push("(d.name LIKE '%Admin%' OR d.name LIKE '%Management%' OR t.department_id = 1)");
+  } else if (department_id) {
     conditions.push('t.department_id = ?');
     params.push(department_id);
   }
@@ -132,6 +176,11 @@ router.get('/', authenticateUser, (req, res) => {
   if (status) {
     conditions.push('t.status = ?');
     params.push(status);
+  } else if (status_not) {
+    conditions.push('t.status != ?');
+    params.push(status_not);
+  } else if (exclude_completed === 'true' || exclude_completed === true) {
+    conditions.push("t.status != 'Completed'");
   }
 
   if (search) {
@@ -204,16 +253,18 @@ router.get('/', authenticateUser, (req, res) => {
     SELECT
       t.*,
       assigner.name as assigned_by_name,
+      assigner.role as assigned_by_role,
       assignee.name as assigned_to_name,
+      assignee.role as assigned_to_role,
       p.name as project_name,
       d.name as department_name,
       (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comment_count,
       (SELECT COUNT(*) FROM task_attachments WHERE task_id = t.id) as attachment_count
     FROM tasks t
-    JOIN users assigner ON t.assigned_by = assigner.id
-    JOIN users assignee ON t.assigned_to = assignee.id
-    JOIN projects p ON t.project_id = p.id
-    JOIN departments d ON t.department_id = d.id
+    LEFT JOIN users assigner ON t.assigned_by = assigner.id
+    LEFT JOIN users assignee ON t.assigned_to = assignee.id
+    LEFT JOIN projects p ON t.project_id = p.id
+    LEFT JOIN departments d ON t.department_id = d.id
     ${whereClause}
     ORDER BY t.${safeSort} ${safeOrder}
   `;
@@ -222,12 +273,17 @@ router.get('/', authenticateUser, (req, res) => {
 
   // Summary Metrics calculation for Dashboard
   let summaryConditions = ['t.deleted_at IS NULL'];
-  if (req.user.role === 'Employee') {
-    summaryConditions.push(`t.assigned_to = ${req.user.id}`);
-  } else if (req.user.role === 'Manager') {
-    if (assigned_by !== 'ALL' && assigned_by !== 'all') {
-      const targetManagerId = assigned_by || req.user.id;
-      summaryConditions.push(`t.assigned_by = ${targetManagerId}`);
+  if (req.user.role === 'Employee' || req.user.role === 'Intern') {
+    if (scope === 'ASSIGNED_BY_ME' || scope === 'assigned_by_me' || assigned_by === 'ME') {
+      summaryConditions.push(`t.assigned_by = ${req.user.id}`);
+    } else if (scope === 'ASSIGNED_TO_ME' || scope === 'assigned_to_me' || scope === 'MY_TASKS') {
+      summaryConditions.push(`t.assigned_to = ${req.user.id}`);
+    } else {
+      summaryConditions.push(`(t.assigned_to = ${req.user.id} OR t.assigned_by = ${req.user.id})`);
+    }
+  } else if (req.user.role === 'Admin') {
+    if (assigned_by && assigned_by !== 'ALL' && assigned_by !== 'all') {
+      summaryConditions.push(`t.assigned_by = ${assigned_by}`);
     }
   }
 
@@ -266,16 +322,18 @@ router.get('/:id', authenticateUser, (req, res) => {
     SELECT
       t.*,
       assigner.name as assigned_by_name,
+      assigner.role as assigned_by_role,
       assigner.email as assigned_by_email,
       assignee.name as assigned_to_name,
+      assignee.role as assigned_to_role,
       assignee.email as assigned_to_email,
       p.name as project_name,
       d.name as department_name
     FROM tasks t
-    JOIN users assigner ON t.assigned_by = assigner.id
-    JOIN users assignee ON t.assigned_to = assignee.id
-    JOIN projects p ON t.project_id = p.id
-    JOIN departments d ON t.department_id = d.id
+    LEFT JOIN users assigner ON t.assigned_by = assigner.id
+    LEFT JOIN users assignee ON t.assigned_to = assignee.id
+    LEFT JOIN projects p ON t.project_id = p.id
+    LEFT JOIN departments d ON t.department_id = d.id
     WHERE t.id = ? OR t.task_id = ?
   `).get(req.params.id, req.params.id);
 
@@ -283,8 +341,8 @@ router.get('/:id', authenticateUser, (req, res) => {
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  // Employee guard
-  if (req.user.role === 'Employee' && task.assigned_to !== req.user.id) {
+  // Employee guard: access allowed if assigned TO or assigned BY this employee
+  if ((req.user.role === 'Employee' || req.user.role === 'Intern') && task.assigned_to !== req.user.id && task.assigned_by !== req.user.id) {
     return res.status(403).json({ message: 'Access denied to this task.' });
   }
 
@@ -322,9 +380,9 @@ router.get('/:id', authenticateUser, (req, res) => {
 });
 
 // -------------------------------------------------------------
-// POST /api/tasks - Create Task (Manager Only)
+// POST /api/tasks - Create Task (Available to Everyone)
 // -------------------------------------------------------------
-router.post('/', authenticateUser, requireRole('Manager'), upload.array('attachments'), (req, res) => {
+router.post('/', authenticateUser, upload.array('attachments'), (req, res) => {
   const {
     title,
     description,
@@ -354,16 +412,17 @@ router.post('/', authenticateUser, requireRole('Manager'), upload.array('attachm
   if (!department_id) {
     return res.status(400).json({ message: 'Department selection is required.' });
   }
-  if (!start_date || !due_date) {
-    return res.status(400).json({ message: 'Start date and due date are required.' });
+  if (!start_date) {
+    return res.status(400).json({ message: 'Start date is required.' });
   }
-  if (new Date(due_date) < new Date(start_date)) {
+  if (due_date && due_date.trim() && new Date(due_date) < new Date(start_date)) {
     return res.status(400).json({ message: 'Due date cannot be earlier than start date.' });
   }
 
   const assignedBy = req.user.id;
   const taskId = generateTaskId();
   const assignDate = assigned_date || new Date().toISOString().split('T')[0];
+  const cleanDueDate = due_date && due_date.trim() ? due_date.trim() : null;
 
   const stmt = db.prepare(`
     INSERT INTO tasks (
@@ -382,7 +441,7 @@ router.post('/', authenticateUser, requireRole('Manager'), upload.array('attachm
     department_id,
     assignDate,
     start_date,
-    due_date,
+    cleanDueDate,
     priority,
     manager_remarks ? manager_remarks.trim() : null
   );
@@ -390,25 +449,17 @@ router.post('/', authenticateUser, requireRole('Manager'), upload.array('attachm
   const createdTask = db.prepare('SELECT * FROM tasks WHERE task_id = ?').get(taskId);
   const newTaskId = createdTask.id;
 
-  // Fetch assigned user name for history
-  const assignee = db.prepare('SELECT name FROM users WHERE id = ?').get(assigned_to);
-  logTaskHistory(
-    newTaskId,
-    req.user.id,
-    req.user.name,
-    'Task Created',
-    null,
-    `Assigned task ${taskId} to ${assignee ? assignee.name : 'Employee'}`
-  );
+  // Task Creation History Log
+  logTaskHistory(newTaskId, req.user.id, req.user.name, 'Task Created', null, `Created task ${taskId}`);
 
-  // Handle uploaded initial attachments if any
+  // Handle uploaded attachments
   if (req.files && req.files.length > 0) {
-    const attachStmt = db.prepare(`
+    const insertAttach = db.prepare(`
       INSERT INTO task_attachments (task_id, user_id, file_name, file_path, file_size)
       VALUES (?, ?, ?, ?, ?)
     `);
     for (const file of req.files) {
-      attachStmt.run(newTaskId, req.user.id, file.originalname, file.filename, file.size);
+      insertAttach.run(newTaskId, req.user.id, file.originalname, file.filename || file.path, file.size);
       logTaskHistory(newTaskId, req.user.id, req.user.name, 'Uploaded Attachment', null, file.originalname);
     }
   }
@@ -420,14 +471,19 @@ router.post('/', authenticateUser, requireRole('Manager'), upload.array('attachm
 });
 
 // -------------------------------------------------------------
-// PUT /api/tasks/:id - Edit Task (Manager Only)
+// PUT /api/tasks/:id - Edit Task
 // -------------------------------------------------------------
-router.put('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
+router.put('/:id', authenticateUser, (req, res) => {
   const taskId = req.params.id;
   const existingTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
 
   if (!existingTask) {
     return res.status(404).json({ message: 'Task not found.' });
+  }
+
+  // Permission Check: Admin, Manager, Assigned Employee, or Task Assigner can edit
+  if (req.user.role !== 'Admin' && req.user.role !== 'Manager' && existingTask.assigned_to !== req.user.id && existingTask.assigned_by !== req.user.id) {
+    return res.status(403).json({ message: 'Permission denied.' });
   }
 
   const {
@@ -483,6 +539,8 @@ router.put('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
     completedDate = null;
   }
 
+  const newDueDate = req.body.hasOwnProperty('due_date') ? (due_date ? due_date : null) : existingTask.due_date;
+
   const stmt = db.prepare(`
     UPDATE tasks SET
       title = COALESCE(?, title),
@@ -491,7 +549,7 @@ router.put('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
       project_id = COALESCE(?, project_id),
       department_id = COALESCE(?, department_id),
       start_date = COALESCE(?, start_date),
-      due_date = COALESCE(?, due_date),
+      due_date = ?,
       completed_date = ?,
       priority = COALESCE(?, priority),
       status = COALESCE(?, status),
@@ -501,17 +559,17 @@ router.put('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
   `);
 
   stmt.run(
-    title,
-    description,
-    assigned_to,
-    project_id,
-    department_id,
-    start_date,
-    due_date,
+    title !== undefined ? title : existingTask.title,
+    description !== undefined ? description : existingTask.description,
+    assigned_to !== undefined ? assigned_to : existingTask.assigned_to,
+    project_id !== undefined ? project_id : existingTask.project_id,
+    department_id !== undefined ? department_id : existingTask.department_id,
+    start_date !== undefined ? start_date : existingTask.start_date,
+    newDueDate,
     completedDate,
-    priority,
-    status,
-    manager_remarks,
+    priority !== undefined ? priority : existingTask.priority,
+    status !== undefined ? status : existingTask.status,
+    manager_remarks !== undefined ? manager_remarks : existingTask.manager_remarks,
     taskId
   );
 
@@ -536,11 +594,9 @@ router.patch('/:id/status', authenticateUser, (req, res) => {
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  // Employee validation: Can only update assigned task
-  if (req.user.role === 'Employee') {
-    if (existingTask.assigned_to !== req.user.id) {
-      return res.status(403).json({ message: 'You can only update tasks assigned to you.' });
-    }
+  // Permission Check: Status can ONLY be changed by Admin or the assigned employee
+  if (req.user.role !== 'Admin' && existingTask.assigned_to !== req.user.id) {
+    return res.status(403).json({ message: 'Status can only be updated by the assigned employee or an Administrator.' });
   }
 
   let completedDate = existingTask.completed_date;
@@ -590,7 +646,7 @@ router.post('/:id/comments', authenticateUser, (req, res) => {
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  if (req.user.role === 'Employee' && task.assigned_to !== req.user.id) {
+  if ((req.user.role === 'Employee' || req.user.role === 'Intern') && task.assigned_to !== req.user.id && task.assigned_by !== req.user.id) {
     return res.status(403).json({ message: 'Access denied to this task.' });
   }
 
@@ -633,7 +689,7 @@ router.post('/:id/attachments', authenticateUser, upload.single('attachment'), (
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  if (req.user.role === 'Employee' && task.assigned_to !== req.user.id) {
+  if ((req.user.role === 'Employee' || req.user.role === 'Intern') && task.assigned_to !== req.user.id && task.assigned_by !== req.user.id) {
     return res.status(403).json({ message: 'Access denied.' });
   }
 
@@ -653,6 +709,71 @@ router.post('/:id/attachments', authenticateUser, upload.single('attachment'), (
   `).all(taskId);
 
   res.status(201).json({ message: 'Attachment uploaded', attachments });
+});
+
+// -------------------------------------------------------------
+// GET /api/tasks/:id/attachments/:attachmentId/download - Download Attachment
+// -------------------------------------------------------------
+router.get('/:id/attachments/:attachmentId/download', authenticateUser, (req, res) => {
+  const { id: taskId, attachmentId } = req.params;
+  const attachment = db.prepare('SELECT * FROM task_attachments WHERE id = ? AND task_id = ?').get(attachmentId, taskId);
+
+  if (!attachment) {
+    return res.status(404).json({ message: 'Attachment not found.' });
+  }
+
+  const uploadDir = path.join(process.cwd(), 'uploads');
+  const filePath = path.isAbsolute(attachment.file_path) ? attachment.file_path : path.join(uploadDir, attachment.file_path);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ message: 'File not found on disk.' });
+  }
+
+  res.download(filePath, attachment.file_name);
+});
+
+// -------------------------------------------------------------
+// DELETE /api/tasks/:id/attachments/:attachmentId - Delete Attachment
+// (Only Admin or the user who attached the file can delete)
+// -------------------------------------------------------------
+router.delete('/:id/attachments/:attachmentId', authenticateUser, (req, res) => {
+  const { id: taskId, attachmentId } = req.params;
+
+  const attachment = db.prepare('SELECT * FROM task_attachments WHERE id = ? AND task_id = ?').get(attachmentId, taskId);
+  if (!attachment) {
+    return res.status(404).json({ message: 'Attachment not found.' });
+  }
+
+  // Permission Check: Attachment can ONLY be deleted by Admin or the user who attached/uploaded that file
+  if (req.user.role !== 'Admin' && attachment.user_id !== req.user.id) {
+    return res.status(403).json({ message: 'Only the user who attached this file or an Administrator can delete it.' });
+  }
+
+  // Delete physical file from disk
+  if (attachment.file_path) {
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.isAbsolute(attachment.file_path) ? attachment.file_path : path.join(uploadDir, attachment.file_path);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error(`Failed to delete physical file ${filePath}:`, err);
+    }
+  }
+
+  db.prepare('DELETE FROM task_attachments WHERE id = ?').run(attachmentId);
+
+  logTaskHistory(taskId, req.user.id, req.user.name, 'Deleted Attachment', attachment.file_name, null);
+
+  const attachments = db.prepare(`
+    SELECT a.*, u.name as user_name
+    FROM task_attachments a
+    JOIN users u ON a.user_id = u.id
+    WHERE a.task_id = ?
+    ORDER BY a.uploaded_at DESC
+  `).all(taskId);
+
+  res.json({ message: 'Attachment deleted successfully', attachments });
 });
 
 // -------------------------------------------------------------
@@ -700,6 +821,10 @@ router.get('/recycle-bin/list', authenticateUser, requireRole('Manager'), (req, 
 // -------------------------------------------------------------
 router.delete('/recycle-bin/empty', authenticateUser, requireRole('Manager'), (req, res) => {
   const tasks = db.prepare('SELECT id FROM tasks WHERE deleted_at IS NOT NULL').all();
+  const taskIds = tasks.map(t => t.id);
+
+  // Permanently delete physical files from uploads directory
+  deletePhysicalAttachments(taskIds);
 
   for (const t of tasks) {
     db.prepare('DELETE FROM task_history WHERE task_id = ?').run(t.id);
@@ -708,7 +833,7 @@ router.delete('/recycle-bin/empty', authenticateUser, requireRole('Manager'), (r
     db.prepare('DELETE FROM tasks WHERE id = ?').run(t.id);
   }
 
-  res.json({ message: `Recycle bin emptied successfully (${tasks.length} tasks permanently purged).` });
+  res.json({ message: `Recycle bin emptied successfully (${tasks.length} tasks and attached files permanently deleted).` });
 });
 
 // -------------------------------------------------------------
@@ -739,16 +864,49 @@ router.delete('/:id/permanent', authenticateUser, requireRole('Manager'), (req, 
     return res.status(404).json({ message: 'Task not found.' });
   }
 
+  // Permanently delete attached physical files from disk
+  deletePhysicalAttachments([taskId]);
+
   db.prepare('DELETE FROM task_history WHERE task_id = ?').run(taskId);
   db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(taskId);
   db.prepare('DELETE FROM task_comments WHERE task_id = ?').run(taskId);
   db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
 
-  res.json({ message: `Task ${task.task_id} permanently deleted.` });
+  res.json({ message: `Task ${task.task_id} and all attached files permanently deleted.` });
 });
 
 // -------------------------------------------------------------
-// DELETE /api/tasks/:id - Move Task to Recycle Bin (Manager Only)
+// DELETE /api/tasks/:taskId/attachments/:attachmentId - Delete Individual Attachment
+// -------------------------------------------------------------
+router.delete('/:taskId/attachments/:attachmentId', authenticateUser, (req, res) => {
+  const { taskId, attachmentId } = req.params;
+
+  const att = db.prepare('SELECT * FROM task_attachments WHERE id = ? AND task_id = ?').get(attachmentId, taskId);
+  if (!att) {
+    return res.status(404).json({ message: 'Attachment not found.' });
+  }
+
+  // Delete physical file from disk
+  if (att.file_path) {
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.isAbsolute(att.file_path) ? att.file_path : path.join(uploadDir, att.file_path);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (e) {
+      console.error(`Failed deleting attachment file ${filePath}:`, e);
+    }
+  }
+
+  db.prepare('DELETE FROM task_attachments WHERE id = ?').run(attachmentId);
+  logTaskHistory(taskId, req.user.id, req.user.name, 'Deleted Attachment', null, att.file_name);
+
+  res.json({ message: `Attachment ${att.file_name} deleted successfully.` });
+});
+
+// -------------------------------------------------------------
+// DELETE /api/tasks/:id - Move Task to Recycle Bin & Delete Storage Attachments (Manager Only)
 // -------------------------------------------------------------
 router.delete('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
   const taskId = req.params.id;
@@ -758,10 +916,14 @@ router.delete('/:id', authenticateUser, requireRole('Manager'), (req, res) => {
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  db.prepare('UPDATE tasks SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(taskId);
-  logTaskHistory(taskId, req.user.id, req.user.name, 'Moved to Recycle Bin', null, 'Auto-purged after 10 days');
+  // Delete physical attachment files from disk storage immediately
+  deletePhysicalAttachments([taskId]);
+  db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(taskId);
 
-  res.json({ message: `Task ${task.task_id} moved to Recycle Bin (auto-deleted after 10 days).` });
+  db.prepare('UPDATE tasks SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(taskId);
+  logTaskHistory(taskId, req.user.id, req.user.name, 'Moved to Recycle Bin', null, 'Attachments deleted from storage');
+
+  res.json({ message: `Task ${task.task_id} deleted and all attached files purged from storage.` });
 });
 
 export default router;

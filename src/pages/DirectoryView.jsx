@@ -3,7 +3,24 @@ import { api } from '../services/api';
 import AddEmployeeModal from '../components/AddEmployeeModal';
 import AddProjectModal from '../components/AddProjectModal';
 import AddDepartmentModal from '../components/AddDepartmentModal';
-import { Users, Briefcase, Building, Mail, Plus, Trash2, GraduationCap, Award, FolderPlus } from 'lucide-react';
+import EmployeeAnalyticsModal from '../components/EmployeeAnalyticsModal';
+import {
+  Users,
+  Briefcase,
+  Building,
+  Mail,
+  Plus,
+  Trash2,
+  GraduationCap,
+  Award,
+  FolderPlus,
+  BarChart3,
+  ChevronRight,
+  TrendingUp,
+  Activity,
+  Layers,
+  RefreshCw
+} from 'lucide-react';
 
 export default function DirectoryView({ type = 'employees' }) {
   const [data, setData] = useState([]);
@@ -11,6 +28,7 @@ export default function DirectoryView({ type = 'employees' }) {
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
 
   const loadData = async () => {
     try {
@@ -36,8 +54,9 @@ export default function DirectoryView({ type = 'employees' }) {
     loadData();
   }, [type]);
 
-  const handleDeleteEmployee = async (emp) => {
-    if (window.confirm(`Are you sure you want to remove ${emp.title || 'team member'} "${emp.name}"? This will also remove tasks assigned to them.`)) {
+  const handleDeleteEmployee = async (e, emp) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to remove ${emp.title || 'team member'} "${emp.name}"? All tasks assigned to them will be safely moved to the Recycle Bin.`)) {
       try {
         await api.deleteEmployee(emp.id);
         loadData();
@@ -47,7 +66,8 @@ export default function DirectoryView({ type = 'employees' }) {
     }
   };
 
-  const handleDeleteProject = async (proj) => {
+  const handleDeleteProject = async (e, proj) => {
+    e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete project "${proj.name}"? This will also remove tasks associated with this project.`)) {
       try {
         await api.deleteProject(proj.id);
@@ -58,7 +78,8 @@ export default function DirectoryView({ type = 'employees' }) {
     }
   };
 
-  const handleDeleteDepartment = async (dept) => {
+  const handleDeleteDepartment = async (e, dept) => {
+    e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete department "${dept.name}"? This will unlink it from any users and projects.`)) {
       try {
         await api.deleteDepartment(dept.id);
@@ -70,9 +91,21 @@ export default function DirectoryView({ type = 'employees' }) {
   };
 
   const titles = {
-    employees: { title: 'Employee Directory', desc: 'Active team members, interns, and department assignments', icon: Users },
-    projects: { title: 'Projects Registry', desc: 'Active organization projects and task distribution', icon: Briefcase },
-    departments: { title: 'Departments Overview', desc: 'Organizational divisions and team assignments', icon: Building }
+    employees: {
+      title: 'Employee Directory & Performance',
+      desc: 'Active team members, interns, and click any employee to view full performance statistics & charts',
+      icon: Users
+    },
+    projects: {
+      title: 'Projects Registry',
+      desc: 'Active organization projects and task distribution',
+      icon: Briefcase
+    },
+    departments: {
+      title: 'Departments Overview',
+      desc: 'Organizational divisions and team assignments',
+      icon: Building
+    }
   };
 
   const currentInfo = titles[type] || titles.employees;
@@ -99,36 +132,47 @@ export default function DirectoryView({ type = 'employees' }) {
           <p className="text-xs text-slate-400">{currentInfo.desc}</p>
         </div>
 
-        {/* Action Button: Add Employee, Add Project, or Add Department */}
-        {type === 'employees' && (
-          <button
-            onClick={() => setShowAddEmployeeModal(true)}
-            className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Team Member</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Action Button: Add Employee, Add Project, or Add Department */}
+          {type === 'employees' && (
+            <button
+              onClick={() => setShowAddEmployeeModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-white/5 transition cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Team Member</span>
+            </button>
+          )}
 
-        {type === 'projects' && (
-          <button
-            onClick={() => setShowAddProjectModal(true)}
-            className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>Add Project</span>
-          </button>
-        )}
+          {type === 'projects' && (
+            <button
+              onClick={() => setShowAddProjectModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-white/5 transition cursor-pointer active:scale-95"
+            >
+              <FolderPlus className="w-4 h-4" />
+              <span>Add Project</span>
+            </button>
+          )}
 
-        {type === 'departments' && (
+          {type === 'departments' && (
+            <button
+              onClick={() => setShowAddDepartmentModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-white/5 transition cursor-pointer active:scale-95"
+            >
+              <Building className="w-4 h-4" />
+              <span>Add Department</span>
+            </button>
+          )}
+
+          {/* Refresh Action Button */}
           <button
-            onClick={() => setShowAddDepartmentModal(true)}
-            className="btn-primary text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+            onClick={loadData}
+            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-neutral-300 border border-zinc-750 text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
+            title={`Refresh ${type} directory`}
           >
-            <Building className="w-4 h-4" />
-            <span>Add Department</span>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-        )}
+        </div>
       </div>
 
       {/* Grid List */}
@@ -138,15 +182,22 @@ export default function DirectoryView({ type = 'employees' }) {
           const isIntern = emp.title === 'Intern';
 
           return (
-            <div key={emp.id} className="glass-card p-4 rounded-xl border border-slate-800 space-y-3 relative group hover:border-slate-700 transition">
+            <div
+              key={emp.id}
+              onClick={() => setSelectedEmployeeId(emp.id)}
+              className="p-4 rounded-xl bg-zinc-950/90 border border-zinc-800 hover:border-zinc-700 hover:shadow-lg space-y-3 relative group transition cursor-pointer"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-sm shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-700 flex items-center justify-center font-bold text-white text-sm shrink-0 group-hover:border-white/40 transition">
                     {emp.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-100 text-sm">{emp.name}</h4>
+                      <h4 className="font-bold text-white text-sm group-hover:text-amber-300 transition flex items-center gap-1">
+                        <span>{emp.name}</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-300" />
+                      </h4>
                       {/* Designation Badge: Intern or Employee */}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                         isIntern
@@ -166,9 +217,9 @@ export default function DirectoryView({ type = 'employees' }) {
                         )}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                      <Mail className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span className="truncate text-slate-400">
+                    <p className="text-xs text-neutral-400 flex items-center gap-1 mt-0.5">
+                      <Mail className="w-3 h-3 text-neutral-500 shrink-0" />
+                      <span className="truncate">
                         {emp.email && !emp.email.endsWith('@company.local') ? emp.email : 'No email registered'}
                       </span>
                     </p>
@@ -177,19 +228,29 @@ export default function DirectoryView({ type = 'employees' }) {
 
                 {/* Delete Employee Button */}
                 <button
-                  onClick={() => handleDeleteEmployee(emp)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 transition cursor-pointer opacity-70 group-hover:opacity-100"
+                  onClick={(e) => handleDeleteEmployee(e, emp)}
+                  className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 transition cursor-pointer opacity-70 group-hover:opacity-100"
                   title={`Delete ${emp.title || 'employee'} ${emp.name}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                <span>Department:</span>
-                <span className="font-semibold text-slate-200 px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
-                  {emp.department_name || 'General'}
-                </span>
+              {/* Bottom Row: Department & Interactive Analytics Action */}
+              <div className="pt-2 border-t border-zinc-850 flex items-center justify-between text-xs text-neutral-400">
+                <span>Dept: <strong className="text-neutral-200">{emp.department_name || 'General'}</strong></span>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEmployeeId(emp.id);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-white hover:text-black text-neutral-300 border border-zinc-800 text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-sky-400 group-hover:text-black" />
+                  <span>View Analytics</span>
+                </button>
               </div>
             </div>
           );
@@ -210,7 +271,7 @@ export default function DirectoryView({ type = 'employees' }) {
 
               {/* Delete Project Button */}
               <button
-                onClick={() => handleDeleteProject(proj)}
+                onClick={(e) => handleDeleteProject(e, proj)}
                 className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 transition cursor-pointer opacity-70 group-hover:opacity-100"
                 title={`Delete project "${proj.name}"`}
               >
@@ -238,15 +299,15 @@ export default function DirectoryView({ type = 'employees' }) {
               <div>
                 <h4 className="font-bold text-slate-100 text-sm">{dept.name}</h4>
                 <div className="mt-1">
-                  <span className="text-[11px] font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">
-                    {dept.total_users} {dept.total_users === 1 ? 'Member' : 'Members'}
+                  <span className="text-[11px] font-bold text-white px-2 py-0.5 rounded bg-neutral-800 border border-neutral-700">
+                    {dept.total_users || 0} Members
                   </span>
                 </div>
               </div>
 
               {/* Delete Department Button */}
               <button
-                onClick={() => handleDeleteDepartment(dept)}
+                onClick={(e) => handleDeleteDepartment(e, dept)}
                 className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/50 transition cursor-pointer opacity-70 group-hover:opacity-100"
                 title={`Delete department "${dept.name}"`}
               >
@@ -261,7 +322,7 @@ export default function DirectoryView({ type = 'employees' }) {
         ))}
       </div>
 
-      {/* Add Employee Modal */}
+      {/* Creation Modals */}
       {showAddEmployeeModal && (
         <AddEmployeeModal
           onClose={() => setShowAddEmployeeModal(false)}
@@ -272,7 +333,6 @@ export default function DirectoryView({ type = 'employees' }) {
         />
       )}
 
-      {/* Add Project Modal */}
       {showAddProjectModal && (
         <AddProjectModal
           onClose={() => setShowAddProjectModal(false)}
@@ -283,7 +343,6 @@ export default function DirectoryView({ type = 'employees' }) {
         />
       )}
 
-      {/* Add Department Modal */}
       {showAddDepartmentModal && (
         <AddDepartmentModal
           onClose={() => setShowAddDepartmentModal(false)}
@@ -291,6 +350,15 @@ export default function DirectoryView({ type = 'employees' }) {
             loadData();
             setShowAddDepartmentModal(false);
           }}
+        />
+      )}
+
+      {/* Employee Detailed Analytics Modal */}
+      {selectedEmployeeId && (
+        <EmployeeAnalyticsModal
+          employeeId={selectedEmployeeId}
+          onClose={() => setSelectedEmployeeId(null)}
+          onRefreshList={loadData}
         />
       )}
     </div>
