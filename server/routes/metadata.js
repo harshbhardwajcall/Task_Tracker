@@ -232,13 +232,10 @@ router.get('/departments', authenticateUser, (req, res) => {
     SELECT
       d.*,
       CASE
-        WHEN d.name LIKE '%Admin%' OR d.name LIKE '%Management%' OR d.id = 1 THEN
-          (
-            COUNT(CASE WHEN u.id IS NOT NULL AND u.role != 'Admin' THEN 1 END) +
-            (SELECT COUNT(*) FROM users WHERE role = 'Admin')
-          )
+        WHEN d.name LIKE '%Admin Tasks%' OR d.name LIKE '%Admin%' OR d.name LIKE '%Management%' THEN
+          (SELECT COUNT(*) FROM users WHERE role = 'Admin')
         ELSE
-          COUNT(CASE WHEN u.id IS NOT NULL THEN 1 END)
+          COUNT(CASE WHEN u.id IS NOT NULL AND u.role != 'Admin' THEN 1 END)
       END as total_users
     FROM departments d
     LEFT JOIN users u ON u.department_id = d.id

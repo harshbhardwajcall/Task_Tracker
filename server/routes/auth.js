@@ -123,10 +123,20 @@ router.post('/admin/users', authenticateUser, (req, res) => {
   const userRole = role === 'Admin' ? 'Admin' : (role === 'Intern' ? 'Intern' : 'Employee');
   const userTitle = title ? title.trim() : (userRole === 'Admin' ? 'Administrator' : (userRole === 'Intern' ? 'Intern' : 'Employee'));
 
+  let targetDeptId = department_id;
+  if (!targetDeptId) {
+    if (userRole === 'Admin') {
+      const adminDept = db.prepare("SELECT id FROM departments WHERE name LIKE '%Admin%' LIMIT 1").get();
+      targetDeptId = adminDept ? adminDept.id : null;
+    } else {
+      targetDeptId = 1;
+    }
+  }
+
   db.prepare(`
     INSERT INTO users (name, email, password, role, department_id, title)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(name.trim(), cleanEmail, hashedPassword, userRole, department_id || 1, userTitle);
+  `).run(name.trim(), cleanEmail, hashedPassword, userRole, targetDeptId, userTitle);
 
   const newUser = db.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, d.name as department_name
