@@ -96,22 +96,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password, role) => {
-    try {
-      setLoading(true);
-      const res = await api.login({ email, password, role });
-      if (res && res.user) {
-        setUser(res.user);
-        setActiveUserId(res.user.id);
-        if (res.token) {
-          setAuthToken(res.token);
-        }
-        await refreshUsers();
-        return res.user;
-      } else {
-        throw new Error('Invalid login response from server.');
+    const res = await api.login({ email, password, role });
+    if (res && res.user) {
+      setUser(res.user);
+      setActiveUserId(res.user.id);
+      if (res.token) {
+        setAuthToken(res.token);
       }
-    } finally {
-      setLoading(false);
+      await refreshUsers();
+      return res.user;
+    } else {
+      throw new Error('Invalid login response from server.');
     }
   };
 
@@ -129,6 +124,16 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    if (user?.id) {
+      await loadUserProfile(user.id);
+    }
+  };
+
+  const updateCurrentUser = (partial) => {
+    setUser(prev => (prev ? { ...prev, ...partial } : prev));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -138,6 +143,8 @@ export function AuthProvider({ children }) {
         login,
         logout,
         refreshUsers,
+        refreshCurrentUser,
+        updateCurrentUser,
         loading
       }}
     >

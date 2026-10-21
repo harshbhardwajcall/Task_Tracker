@@ -3,12 +3,50 @@
 @tailwind utilities;
 
 @layer base {
+  :root, html.dark {
+    --bg-primary: #000000;
+    --bg-surface: #0c0c10;
+    --bg-card: #121216;
+    --bg-card-hover: #18181f;
+    --bg-input: #09090b;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-subtle: rgba(255, 255, 255, 0.04);
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    color-scheme: dark;
+  }
+
+  html.light, [data-theme="light"] {
+    --bg-primary: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f5f9;
+    --bg-input: #ffffff;
+    --border-color: #e2e8f0;
+    --border-subtle: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    color-scheme: light;
+  }
+
   html, body, #root {
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark, html.dark body, html.dark #root {
     background-color: #000000 !important;
     background: #000000 !important;
     color: #f4f4f5 !important;
-    min-height: 100vh;
-    overflow-x: hidden;
+  }
+
+  html.light, html.light body, html.light #root {
+    background-color: #f8fafc !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
   }
 }
 
@@ -18,51 +56,269 @@
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+html.dark ::-webkit-scrollbar-track {
   background: #000000;
 }
 
-::-webkit-scrollbar-thumb {
+html.dark ::-webkit-scrollbar-thumb {
   background: #18181b;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+html.dark ::-webkit-scrollbar-thumb:hover {
   background: #27272a;
 }
 
-/* Glassmorphism containers - True Deep Obsidian Pitch-Black */
-.glass-panel {
-  background: rgba(4, 4, 6, 0.96) !important;
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glassmorphism & Panel containers - Universal Deep Pitch-Black by default, clean solid in light */
+.glass-panel,
+html.dark .glass-panel {
+  background: rgba(8, 8, 12, 0.98) !important;
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.95);
 }
 
-.glass-card {
-  background: rgba(8, 8, 10, 0.94) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+html.light .glass-panel {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
 }
 
-.glass-card:hover {
-  background: rgba(14, 14, 18, 0.98) !important;
-  border-color: rgba(255, 255, 255, 0.12);
+.glass-card,
+html.dark .glass-card {
+  background: rgba(12, 12, 16, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+html.light .glass-card {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.glass-card:hover,
+html.dark .glass-card:hover {
+  background: rgba(18, 18, 24, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.14);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.95);
 }
 
-/* Input fields styling */
+/* ==========================================================================
+   LIGHT MODE COMPREHENSIVE DESIGN OVERRIDES
+   ========================================================================== */
+
+/* 1. Page Background, Main Wrapper & Canvas in Light Mode */
+html.light,
+html.light body,
+html.light #root,
+html.light div.min-h-screen,
+html.light .bg-black {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.light main {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* 2. Top Header & Navbars in Light Mode */
+html.light header,
+html.light header.bg-black\/95,
+html.light header[class*="bg-black"],
+html.light div.bg-black\/95,
+html.light [class*="top-[57px]"],
+html.light .sticky[class*="bg-black"],
+html.light .bg-black\/95,
+html.light .bg-black\/90,
+html.light .bg-black\/80 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+  color: #0f172a !important;
+}
+
+/* 3. Global Containers & Cards in Light Mode */
+html.light .glass-panel,
+html.light .glass-card,
+html.light [class*="bg-zinc-950"],
+html.light [class*="bg-zinc-900"],
+html.light [class*="bg-zinc-850"],
+html.light [class*="bg-neutral-950"],
+html.light [class*="bg-neutral-900"],
+html.light [class*="bg-slate-950"],
+html.light [class*="bg-slate-850"],
+html.light [class*="bg-[#0c0c10]"],
+html.light [class*="bg-[#0c0c12]"],
+html.light [class*="bg-[#08080c]"],
+html.light [class*="bg-[#07070a]"],
+html.light [class*="bg-[#0b0b0e]"],
+html.light [class*="bg-[#0e0e12]"],
+html.light div.bg-white,
+html.light [class*="bg-white/"],
+html.light div.bg-slate-50,
+html.light [class*="bg-slate-50"] {
+  background-color: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light [class*="bg-zinc-800"],
+html.light [class*="bg-zinc-750"],
+html.light [class*="bg-neutral-800"],
+html.light [class*="bg-neutral-850"],
+html.light [class*="bg-slate-800"],
+html.light [class*="bg-slate-750"] {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+/* 4. Glass Cards Hover in Light Mode */
+html.light .glass-card:hover,
+html.light [class*="hover:border-zinc-700"]:hover,
+html.light [class*="hover:border-zinc-500"]:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 5. Modal Backdrops */
+html.light .fixed.inset-0[class*="bg-slate-950"],
+html.light .fixed.inset-0[class*="bg-zinc-950"],
+html.light .fixed.inset-0[class*="bg-black"],
+html.light .fixed.inset-0.bg-black\/85,
+html.light .fixed.inset-0.bg-black\/80,
+html.light .fixed.inset-0.bg-black\/70,
+html.light .fixed.inset-0.bg-black\/60,
+html.light .fixed.inset-0.bg-slate-950\/85 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(6px);
+}
+
+/* 6. Text Visibility in Light Mode */
+html.light .text-white,
+html.light .text-neutral-100, 
+html.light .text-neutral-200,
+html.light .text-zinc-100, 
+html.light .text-zinc-200,
+html.light .text-slate-100, 
+html.light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+html.light .text-neutral-300,
+html.light .text-zinc-300,
+html.light .text-slate-300 {
+  color: #1e293b !important;
+}
+
+html.light .text-neutral-400,
+html.light .text-zinc-400,
+html.light .text-slate-400 {
+  color: #334155 !important;
+}
+
+html.light .text-neutral-500,
+html.light .text-zinc-500,
+html.light .text-slate-500 {
+  color: #475569 !important;
+}
+
+html.light .text-neutral-600,
+html.light .text-zinc-600,
+html.light .text-slate-600 {
+  color: #475569 !important;
+}
+
+/* Clear Headings in Light Mode */
+html.light .bg-clip-text {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  color: #0f172a !important;
+}
+
+/* 7. Borders & Dividers in Light Mode */
+html.light [class*="border-zinc-"],
+html.light [class*="border-neutral-"],
+html.light [class*="border-white/"],
+html.light [class*="border-slate-"] {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .divide-zinc-800 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-neutral-800 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* 8. Form Inputs & Selects in Light Mode */
 .input-field {
   @apply bg-black/95 border border-neutral-800 text-neutral-100 text-xs rounded-lg focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 block w-full p-2.5 transition duration-150 outline-none placeholder-neutral-600;
 }
 
+html.light .input-field,
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.light input:focus,
+html.light select:focus,
+html.light textarea:focus {
+  border-color: #0f172a !important;
+  outline: none;
+  box-shadow: 0 0 0 1px #0f172a !important;
+}
+
+html.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html.dark select {
+  color-scheme: dark !important;
+}
+
+html.dark select option {
+  background-color: #09090b !important;
+  color: #f4f4f5 !important;
+}
+
 /* Date input calendar icon styling */
-input[type="date"] {
+html.dark input[type="date"] {
   color-scheme: dark !important;
   cursor: pointer;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator {
+html.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) brightness(1.2);
   cursor: pointer;
   opacity: 0.9;
@@ -71,20 +327,331 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   transition: all 0.15s ease-in-out;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-  background-color: rgba(255, 255, 255, 0.15);
-  transform: scale(1.15);
+html.light input[type="date"] {
+  color-scheme: light !important;
+  cursor: pointer;
 }
 
+html.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  cursor: pointer;
+  opacity: 0.75;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+/* 9. Buttons in Light Mode */
 .btn-primary {
   @apply bg-white hover:bg-neutral-200 text-black font-bold rounded-lg text-sm px-4 py-2.5 transition duration-200 shadow-lg shadow-white/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2;
 }
 
+/* Primary Action Buttons (e.g. Create Task, Save, Login submit) */
+html.light .btn-primary,
+html.light button[class*="bg-white"]:not([class*="hover:bg-white"]):not([class*="bg-zinc"]):not([class*="bg-neutral"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-purple"]):not([class*="bg-sky"]):not([class*="bg-rose"]),
+html.light .btn-primary-action {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #0f172a !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+}
+
+html.light .btn-primary:hover,
+html.light button[class*="bg-white"]:not([class*="hover:bg-white"]):not([class*="bg-zinc"]):not([class*="bg-neutral"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-purple"]):not([class*="bg-sky"]):not([class*="bg-rose"]):hover {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+html.light .btn-primary svg,
+html.light .btn-primary span,
+html.light button[class*="bg-white"]:not([class*="hover:bg-white"]):not([class*="bg-zinc"]):not([class*="bg-neutral"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-purple"]):not([class*="bg-sky"]):not([class*="bg-rose"]) svg,
+html.light button[class*="bg-white"]:not([class*="hover:bg-white"]):not([class*="bg-zinc"]):not([class*="bg-neutral"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-purple"]):not([class*="bg-sky"]):not([class*="bg-rose"]) span {
+  color: #ffffff !important;
+}
+
+/* Secondary Action Buttons (e.g. Add Employee, Add Department, Add Project, Refresh) */
 .btn-secondary {
   @apply bg-black/90 hover:bg-neutral-900 text-neutral-200 border border-neutral-800 font-medium rounded-lg text-sm px-4 py-2.5 transition duration-150 flex items-center justify-center gap-2;
 }
 
+html.light button[class*="bg-zinc-850"],
+html.light button[class*="bg-zinc-900"],
+html.light button[class*="bg-zinc-800"],
+html.light button[class*="bg-neutral-900"],
+html.light button[class*="bg-neutral-850"],
+html.light button[class*="bg-neutral-800"],
+html.light .btn-secondary {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light button[class*="bg-zinc-850"]:hover,
+html.light button[class*="bg-zinc-900"]:hover,
+html.light button[class*="bg-zinc-800"]:hover,
+html.light button[class*="bg-neutral-900"]:hover,
+html.light button[class*="bg-neutral-850"]:hover,
+html.light button[class*="bg-neutral-800"]:hover,
+html.light .btn-secondary:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+html.light button[class*="bg-zinc-"] span,
+html.light button[class*="bg-neutral-"] span,
+html.light button[class*="bg-slate-"] span {
+  color: #0f172a !important;
+}
+
+/* Danger Buttons */
 .btn-danger {
   @apply bg-rose-700 hover:bg-rose-600 text-white font-medium rounded-lg text-sm px-3 py-1.5 transition duration-150 flex items-center gap-1.5;
+}
+
+/* Set Password Button in Admin Settings */
+html.light button:has(.lucide-key-round),
+html.light button[class*="text-amber-300"][class*="bg-zinc-900"] {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+  color: #b45309 !important;
+}
+
+html.light button:has(.lucide-key-round):hover,
+html.light button[class*="text-amber-300"][class*="bg-zinc-900"]:hover {
+  background-color: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+/* View Analytics Button in Directory */
+html.light button:has(.lucide-bar-chart-3) {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light button:has(.lucide-bar-chart-3):hover {
+  background-color: #0f172a !important;
+  border-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+html.light button:has(.lucide-bar-chart-3):hover span,
+html.light button:has(.lucide-bar-chart-3):hover svg {
+  color: #ffffff !important;
+}
+
+/* 10. Badges, Pills and Avatars in Light Mode */
+html.light .w-10.h-10.rounded-xl.bg-zinc-900,
+html.light .w-9.h-9.rounded-lg.bg-zinc-900,
+html.light .w-8.h-8.rounded-lg.bg-zinc-900,
+html.light .w-10.h-10.rounded-xl.bg-zinc-800,
+html.light .w-9.h-9.rounded-lg.bg-zinc-800 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Pastel Badge Tones in Light Mode */
+html.light [class*="bg-amber-500/10"],
+html.light [class*="bg-amber-500/15"],
+html.light [class*="bg-amber-500/20"],
+html.light [class*="bg-amber-950"] {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fcd34d !important;
+}
+
+html.light [class*="bg-emerald-500/10"],
+html.light [class*="bg-emerald-500/15"],
+html.light [class*="bg-emerald-500/20"],
+html.light [class*="bg-emerald-950"] {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+  border-color: #86efac !important;
+}
+
+html.light [class*="bg-purple-500/10"],
+html.light [class*="bg-purple-500/15"],
+html.light [class*="bg-purple-500/20"],
+html.light [class*="bg-purple-950"] {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+  border-color: #d8b4fe !important;
+}
+
+html.light [class*="bg-sky-500/10"],
+html.light [class*="bg-sky-500/15"],
+html.light [class*="bg-sky-500/20"],
+html.light [class*="bg-sky-950"],
+html.light [class*="bg-sky-900"] {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+}
+
+html.light [class*="bg-rose-500/10"],
+html.light [class*="bg-rose-500/15"],
+html.light [class*="bg-rose-500/20"],
+html.light [class*="bg-rose-950"] {
+  background-color: #ffe4e6 !important;
+  color: #9f1239 !important;
+  border-color: #fda4af !important;
+}
+
+/* Badge Text Colors in Light Mode */
+html.light [class*="text-amber-300"],
+html.light [class*="text-amber-200"] {
+  color: #b45309 !important;
+}
+
+html.light [class*="text-emerald-300"],
+html.light [class*="text-emerald-200"] {
+  color: #15803d !important;
+}
+
+html.light [class*="text-purple-300"],
+html.light [class*="text-purple-200"] {
+  color: #7e22ce !important;
+}
+
+html.light [class*="text-sky-300"],
+html.light [class*="text-sky-400"] {
+  color: #0284c7 !important;
+}
+
+html.light [class*="text-rose-300"],
+html.light [class*="text-rose-400"] {
+  color: #e11d48 !important;
+}
+
+/* 11. Navigation Tabs & Mode Switchers in Light Mode */
+html.light .bg-zinc-950 button.bg-white,
+html.light .bg-zinc-900 button.bg-white {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .bg-zinc-950 button.bg-white span,
+html.light .bg-zinc-950 button.bg-white svg,
+html.light .bg-zinc-900 button.bg-white span,
+html.light .bg-zinc-900 button.bg-white svg {
+  color: #ffffff !important;
+}
+
+/* Active Navigation Tabs */
+html.light .bg-white\/10 {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #0f172a !important;
+}
+
+html.light .bg-white\/10 span,
+html.light .bg-white\/10 svg {
+  color: #ffffff !important;
+}
+
+/* 12. Summary Cards in Light Mode */
+html.light .from-\[\#0e0e12\] {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(8px);
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.light .from-amber-950\/20 {
+  background: rgba(255, 251, 235, 0.65) !important;
+  backdrop-filter: blur(8px);
+  border-color: #fde68a !important;
+}
+
+html.light .from-emerald-950\/20 {
+  background: rgba(240, 253, 244, 0.65) !important;
+  backdrop-filter: blur(8px);
+  border-color: #bbf7d0 !important;
+}
+
+html.light .from-rose-950\/20 {
+  background: rgba(255, 241, 242, 0.65) !important;
+  backdrop-filter: blur(8px);
+  border-color: #fecdd3 !important;
+}
+
+/* 13. Tables in Light Mode */
+html.light table {
+  background-color: transparent !important;
+}
+
+html.light table th {
+  background-color: rgba(241, 245, 249, 0.82) !important;
+  backdrop-filter: blur(8px);
+  color: #0f172a !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  font-weight: 800 !important;
+}
+
+html.light table tbody {
+  background-color: transparent !important;
+}
+
+html.light table tbody tr {
+  background-color: rgba(255, 255, 255, 0.55) !important;
+}
+
+html.light table td {
+  color: #0f172a !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+
+html.light table td span {
+  color: #0f172a;
+}
+
+html.light table td .font-mono {
+  color: #000000 !important;
+  font-weight: 900 !important;
+}
+
+html.light tr:hover td,
+html.light tr.hover\:bg-white\/\[0\.03\]:hover td {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
+/* 14. Ambient watermark visibility in light mode */
+html.light #app-ambient-watermark,
+html.light .fixed.inset-0.pointer-events-none {
+  opacity: 0.50 !important;
+}
+
+html.light #app-ambient-watermark img,
+html.light .fixed.inset-0.pointer-events-none img {
+  opacity: 1 !important;
+  filter: contrast(1.15) brightness(0.95) drop-shadow(0 20px 45px rgba(0, 0, 0, 0.16)) !important;
+}
+
+/* 15. Keep Modals Solid White in Light Mode for optimal form input legibility */
+html.light .fixed.inset-0.z-\[9999\] > div,
+html.light .fixed.inset-0.z-50 > div,
+html.light [role="dialog"] > div {
+  background-color: #ffffff !important;
+  backdrop-filter: none !important;
+}
+
+/* 16. Native Select & Option Color Scheme for crystal-clear readability */
+select {
+  color-scheme: light dark;
+}
+
+html.dark select,
+html.dark select option {
+  background-color: #09090b !important;
+  color: #f4f4f5 !important;
+}
+
+html.light select,
+html.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }

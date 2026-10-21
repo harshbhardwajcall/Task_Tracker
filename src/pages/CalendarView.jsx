@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import StatusBadge from '../components/StatusBadge';
-import TaskDetailsModal from '../components/TaskDetailsModal';
+import { StatusBadge, TaskDetailsModal } from '../components';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function CalendarView() {
@@ -103,11 +102,10 @@ export default function CalendarView() {
               return (
                 <div
                   key={dayNum}
-                  className={`h-28 p-1.5 rounded-xl border transition flex flex-col justify-between overflow-hidden ${
-                    isToday
+                  className={`h-28 p-1.5 rounded-xl border transition flex flex-col justify-between overflow-hidden ${isToday
                       ? 'bg-neutral-800/70 border-neutral-400 shadow-md shadow-white/5'
                       : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className={`text-xs font-extrabold ${isToday ? 'text-white underline decoration-neutral-400 underline-offset-2' : 'text-slate-300'}`}>
@@ -129,13 +127,12 @@ export default function CalendarView() {
                         <div
                           key={t.id}
                           onClick={() => setSelectedTaskId(t.id)}
-                          className={`p-1 rounded text-[10px] font-medium truncate cursor-pointer transition flex items-center justify-between gap-1 ${
-                            isCompleted
+                          className={`p-1 rounded text-[10px] font-medium truncate cursor-pointer transition flex items-center justify-between gap-1 ${isCompleted
                               ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/40'
                               : isOverdue
-                              ? 'bg-rose-950/90 text-rose-300 border border-rose-800/50'
-                              : 'bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700'
-                          }`}
+                                ? 'bg-rose-950/90 text-rose-300 border border-rose-800/50'
+                                : 'bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700'
+                            }`}
                           title={`${t.task_id}: ${t.title} (${t.status})`}
                         >
                           <span className="truncate">{t.task_id}: {t.title}</span>

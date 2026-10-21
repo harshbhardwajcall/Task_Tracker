@@ -1,6 +1,67 @@
-node_modules
-dist
-.env
-.DS_Store
-*.log
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
+# Production Build outputs
+dist/
+dist-ssr/
+build/
+*.local
+
+# Environment variables & secrets (CRITICAL: Never commit to git)
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+*.env
+
+# SQLite Database & Storage (CRITICAL: Contains employee data & credentials)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+server/db/*.db
+
+# User Uploaded Attachments & Media (Keep folder structure only via .gitkeep)
+uploads/*
+!uploads/.gitkeep
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
+# Temporary scratch & debug scripts
+scratch_*.js
+scratch/
+temp/
+*.tmp
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & IDE directories
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

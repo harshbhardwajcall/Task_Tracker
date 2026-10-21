@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import StatusBadge from '../components/StatusBadge';
-import PriorityBadge from '../components/PriorityBadge';
+import { StatusBadge, PriorityBadge } from '../components';
 import { Trash2, RotateCcw, AlertTriangle, Clock, Calendar, CheckCircle2, ShieldAlert, RefreshCw } from 'lucide-react';
 
 export default function RecycleBinView() {

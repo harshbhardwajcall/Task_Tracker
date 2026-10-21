@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
   ShieldCheck,
   UserCheck,
@@ -7,11 +8,16 @@ import {
   Lock,
   Mail,
   Eye,
-  EyeOff
+  EyeOff,
+  AlertTriangle,
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
+  const { theme, toggleTheme, isDark } = useTheme();
   const [loginMode, setLoginMode] = useState('Admin'); // 'Admin' | 'Employee'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,19 +32,71 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email.trim()) {
+      setError('Please enter your work email address.');
+      return;
+    }
+    if (!password.trim()) {
+      setError('Please enter your account password.');
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
       await login(email.trim(), password.trim(), loginMode);
     } catch (err) {
-      setError(err.message || 'Authentication failed. Please verify your credentials.');
+      console.error('Login failed:', err);
+      setError(err.message || 'Wrong email or password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-black text-neutral-100 flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-white/20">
+    <div className="min-h-screen bg-slate-50 dark:bg-black text-slate-900 dark:text-neutral-100 flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-white/20">
+      {/* Top Floating Theme Switcher */}
+      <div className="fixed top-6 right-6 z-40">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-xs font-bold transition duration-200 cursor-pointer shadow-lg backdrop-blur-md text-neutral-300 hover:text-white active:scale-95"
+          title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+        >
+          {isDark ? (
+            <>
+              <Sun className="w-4 h-4 text-amber-400" />
+              <span>Light Mode</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-4 h-4 text-indigo-500" />
+              <span>Dark Mode</span>
+            </>
+          )}
+        </button>
+      </div>
+      {/* Floating Popup Toast on Error */}
+      {error && (
+        <div className="fixed top-6 right-6 z-50 max-w-sm w-full bg-rose-950/95 border-2 border-rose-500/80 text-rose-100 p-4 rounded-2xl shadow-2xl shadow-rose-950/90 flex items-start gap-3 backdrop-blur-xl animate-in slide-in-from-top-4 duration-300">
+          <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 text-rose-400">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div className="flex-1 text-xs">
+            <div className="font-extrabold text-white text-[13px] mb-0.5">Authentication Error</div>
+            <div className="text-rose-200 font-medium leading-relaxed">{error}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            className="text-rose-400 hover:text-white p-1 rounded-lg hover:bg-rose-900/50 transition cursor-pointer"
+            title="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Background Watermark & Glow Accents */}
       <div className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden opacity-10 select-none">
         <img
@@ -72,47 +130,50 @@ export default function Login() {
 
         {/* Login Panel */}
         <div className="bg-[#0c0c10]/95 backdrop-blur-xl p-6 sm:p-8 rounded-2xl border border-white/10 shadow-2xl shadow-black/90 space-y-5">
-          {/* Mode Switcher Tabs: Admin Login vs Employee Login */}
+          {/* Mode Switcher Tabs: Admin vs Employee (includes Interns) */}
           <div className="grid grid-cols-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800 gap-1">
             <button
               type="button"
               onClick={() => handleModeChange('Admin')}
-              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition duration-200 cursor-pointer ${
-                loginMode === 'Admin'
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition duration-200 cursor-pointer ${loginMode === 'Admin'
                   ? 'bg-white text-black shadow-md'
                   : 'text-neutral-400 hover:text-white hover:bg-zinc-900'
-              }`}
+                }`}
             >
-              <ShieldCheck className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>Admin Portal</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleModeChange('Employee')}
-              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition duration-200 cursor-pointer ${
-                loginMode === 'Employee'
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition duration-200 cursor-pointer ${loginMode === 'Employee'
                   ? 'bg-white text-black shadow-md'
                   : 'text-neutral-400 hover:text-white hover:bg-zinc-900'
-              }`}
+                }`}
             >
-              <UserCheck className="w-4 h-4" />
+              <UserCheck className="w-4 h-4 shrink-0" />
               <span>Employee Portal</span>
             </button>
           </div>
 
-          {/* Mode Description Tag */}
-          <div className="text-[11px] text-neutral-400 px-1">
-            {loginMode === 'Admin'
-              ? '🔑 Full access: Manage staff, departments, projects, and assign tasks'
-              : '📋 Employee access: View and manage your assigned tasks only'}
-          </div>
 
-          {/* Error Message */}
+          {/* In-Card Error Banner */}
           {error && (
-            <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-200 text-xs font-medium animate-in fade-in duration-200 flex items-start gap-2">
-              <span className="shrink-0 text-rose-400">⚠️</span>
-              <span className="flex-1">{error}</span>
+            <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-500/80 text-rose-200 text-xs font-medium animate-in fade-in zoom-in-95 duration-200 flex items-start gap-2.5 shadow-lg shadow-rose-950/50">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-bold text-white block">Login Error</span>
+                <span className="text-rose-200">{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError('')}
+                className="text-rose-400 hover:text-white p-0.5"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 

@@ -10,7 +10,8 @@ export function generateToken(user) {
       name: user.name,
       email: user.email,
       role: user.role,
-      department_id: user.department_id
+      department_id: user.department_id,
+      avatar: user.avatar || null
     },
     JWT_SECRET,
     { expiresIn: '7d' }
@@ -22,7 +23,7 @@ export function authenticateUser(req, res, next) {
   const customUserId = req.headers['x-user-id'];
   if (customUserId) {
     const user = db.prepare(`
-      SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name
+      SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       WHERE u.id = ?
@@ -49,7 +50,7 @@ export function authenticateUser(req, res, next) {
 
   // Default auto-login user (System Admin or Manager A) if no auth header passed
   const defaultUser = db.prepare(`
-    SELECT u.id, u.name, u.email, u.role, u.department_id, d.name as department_name
+    SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
     FROM users u
     LEFT JOIN departments d ON u.department_id = d.id
     WHERE u.role = 'Admin' OR u.id = 1

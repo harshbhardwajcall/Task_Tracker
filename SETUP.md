@@ -1,0 +1,167 @@
+# 🛠️ Task Tracker - Quick Setup & Onboarding Guide
+
+Welcome to **Task Tracker**! This guide walks you through setting up and running the application locally on your machine in under **3 minutes**.
+
+---
+
+## ⚡ 1-Minute Quick Start (TL;DR)
+
+Open your terminal in your desired folder and run:
+
+```bash
+# 1. Clone the repository
+git clone <your-repository-url>
+cd Task_Tracker
+
+# 2. Install dependencies (Frontend & Backend)
+npm install
+
+# 3. Create your local environment configuration
+# On Windows (PowerShell):
+Copy-Item .env.example .env
+# On Mac/Linux (Bash):
+cp .env.example .env
+
+# 4. Initialize database tables & seed sample accounts
+npm run seed
+
+# 5. Start the application
+npm run dev
+```
+
+Open your browser at **[http://localhost:5173](http://localhost:5173)**.
+
+---
+
+## 📋 Prerequisites
+
+Before starting, ensure you have the following installed:
+
+- **Node.js**: `v18.0.0` or higher ([Download Node.js](https://nodejs.org/))
+- **npm**: `v9.0.0` or higher (bundled with Node.js)
+- **Git**: ([Download Git](https://git-scm.com/))
+
+Verify versions in your terminal:
+```bash
+node -v
+npm -v
+```
+
+---
+
+## 🔑 Default Login Credentials
+
+After running `npm run seed`, the system comes pre-configured with demo accounts across all access tiers:
+
+| Role | Portal Tab | Email | Password | What You Can Do |
+|---|---|---|---|---|
+| **System Admin** | **Admin** | `admin@company.com` | `password123` | Full system control, manager governance, reports, audit logs & recycle bin |
+| **Developer (Lead)** | **Employee** | `rahul@company.com` | `password123` | Manage squads, tasks, dependencies & reports |
+| **UI/UX Designer** | **Employee** | `priya@company.com` | `password123` | Task tracking, attachments & comments |
+| **Marketing** | **Employee** | `alex@company.com` | `password123` | Task updates, self-logs & personal notes |
+| **QA / Tester** | **Employee** | `dev@company.com` | `password123` | Bug reporting, testing checklists & status flows |
+
+> **Tip:** On the login screen, select the **"Admin"** tab if logging in as `admin@company.com`, or the **"Employee"** tab for employee accounts.
+
+### 🚀 Step-by-Step First Login Walkthrough
+
+1. Open your browser and navigate to **`http://localhost:5173`**.
+2. At the top of the login panel, select your portal mode:
+   - **To log in as Admin:** Ensure the **"Admin Portal"** tab (with the Shield icon) is selected.
+   - **To log in as Employee:** Click the **"Employee Portal"** tab (with the User icon).
+3. Enter the default credentials:
+   - **Work Email:** `admin@company.com`
+   - **Password:** `password123`
+4. Click **"Sign In as Admin"**.
+5. You will immediately be authenticated and redirected to the **Admin Management Dashboard**, where you can manage teams, projects, employees, and settings.
+
+*(To test as an employee later, click the user profile icon in the top-right corner to log out, choose the **Employee Portal** tab, and sign in with `rahul@company.com` / `password123`).*
+
+---
+
+## ⚙️ Environment Configuration (`.env`)
+
+A template file named `.env.example` is provided in the repository root.
+
+When you copy it to `.env`:
+```env
+# Server Port
+PORT=5000
+
+# Application URL
+APP_URL=http://localhost:5173
+
+# Company SMTP Mail Service (Optional - for Email Notifications)
+SMTP_HOST=mail.callastro.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your_email@callastro.com
+SMTP_PASS=your_email_password
+MAIL_FROM="Call Astro Tasks <your_email@callastro.com>"
+```
+
+> **Note:** The app works completely fine without real email credentials! If email credentials are not set, task notifications simply skip dispatching without breaking any UI operations.
+
+---
+
+## 💻 Available NPM Scripts
+
+Run these scripts from the project root:
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Starts both the **Express backend** (port `5000`) and the **Vite frontend** (port `5173`) concurrently |
+| `npm run seed` | Re-initializes SQLite database tables and seeds demo departments, projects, and users |
+| `npm run build` | Compiles the production-ready React bundle into the `dist/` directory |
+| `npm run preview` | Previews the compiled production build locally |
+| `npm run test` | Runs the automated backend API test suite |
+
+---
+
+## 🏗️ Architecture & Network Ports
+
+```
+┌─────────────────────────────────┐        ┌──────────────────────────────────┐
+│  React 18 Frontend (Vite)       │        │  Express.js Backend API          │
+│  http://localhost:5173          ├───────►│  http://localhost:5000           │
+│  (UI Components & Tailwind CSS) │ REST   │  (Routes, JWT Auth & Multer)     │
+└─────────────────────────────────┘        └─────────────────┬────────────────┘
+                                                             │
+                                                   ┌─────────▼────────┐
+                                                   │ SQLite (sql.js)  │
+                                                   │ tracker.db       │
+                                                   └──────────────────┘
+```
+
+- **Frontend Port:** `5173` (proxies `/api` calls directly to port 5000)
+- **Backend API Port:** `5000`
+- **Database Engine:** SQLite (powered by `sql.js` in-memory with automatic disk-sync to `server/db/tracker.db`)
+
+---
+
+## ❓ Troubleshooting & FAQs
+
+### 1. "Port 5000 or 5173 is already in use"
+If another application is running on port `5000`:
+- Set `PORT=5001` in your `.env` file.
+- Or terminate the existing process occupying the port:
+  - **Windows:** `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess | Stop-Process`
+  - **Mac/Linux:** `npx kill-port 5000`
+
+### 2. "Wrong email or password. Please try again"
+If you modified users or want a clean fresh database:
+```bash
+npm run seed
+```
+This will recreate all default tables and reset the default `admin@company.com` / `password123` credentials.
+
+### 3. "Which files should I NEVER commit to Git?"
+- **`.env`** (Contains your secrets and email passwords).
+- **`server/db/tracker.db`** (Your local SQLite database with real tasks and user records).
+- **`uploads/`** (User-uploaded files and media).
+*(All of these are already configured in `.gitignore` for your safety).*
+
+---
+
+## 📞 Support & Contributions
+For feature requests, bug reports, or questions, please open an issue in this repository or contact the project team. Happy tracking! 🚀

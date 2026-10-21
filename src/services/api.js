@@ -120,9 +120,15 @@ export const api = {
     body: { status }
   }),
 
-  addComment: (id, comment) => request(`/tasks/${id}/comments`, {
-    method: 'POST',
-    body: { comment }
+  addComment: (id, payload) => {
+    const isFormData = payload instanceof FormData;
+    return request(`/tasks/${id}/comments`, {
+      method: 'POST',
+      body: isFormData ? payload : (typeof payload === 'string' ? { comment: payload } : payload)
+    });
+  },
+  deleteComment: (taskId, commentId) => request(`/tasks/${taskId}/comments/${commentId}`, {
+    method: 'DELETE'
   }),
 
   uploadAttachment: (id, formData) => request(`/tasks/${id}/attachments`, {
@@ -144,7 +150,13 @@ export const api = {
 
   // Employees & Metadata
   getEmployees: () => request('/employees'),
-  getEmployeeAnalytics: (id) => request(`/employees/${id}/analytics`),
+  getEmployeeAnalytics: (id, params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.startDate) searchParams.append('startDate', params.startDate);
+    if (params.endDate) searchParams.append('endDate', params.endDate);
+    const qs = searchParams.toString();
+    return request(`/employees/${id}/analytics${qs ? `?${qs}` : ''}`);
+  },
   createEmployee: (employeeData) => request('/employees', {
     method: 'POST',
     body: employeeData
@@ -160,17 +172,121 @@ export const api = {
   deleteDepartment: (id) => request(`/departments/${id}`, {
     method: 'DELETE'
   }),
+  updateDepartment: (id, data) => request(`/departments/${id}`, {
+    method: 'PUT',
+    body: data
+  }),
+  getJobTitles: () => request('/job-titles'),
+  createJobTitle: (data) => request('/job-titles', {
+    method: 'POST',
+    body: data
+  }),
+  deleteJobTitle: (id) => request(`/job-titles/${id}`, {
+    method: 'DELETE'
+  }),
   getProjects: () => request('/projects'),
   createProject: (data) => request('/projects', {
     method: 'POST',
+    body: data
+  }),
+  updateProject: (id, data) => request(`/projects/${id}`, {
+    method: 'PUT',
     body: data
   }),
   deleteProject: (id) => request(`/projects/${id}`, {
     method: 'DELETE'
   }),
   getReports: (params = {}) => {
-    const query = new URLSearchParams(params);
+    const query = new URLSearchParams();
+    Object.keys(params).forEach(k => {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        query.append(k, params[k]);
+      }
+    });
     return request(`/reports?${query.toString()}`);
-  }
+  },
+  removeEmployeeFromProject: (employeeId, projectId) => request(`/reports/employees/${employeeId}/projects/${projectId}`, { method: 'DELETE' }),
+  restoreEmployeeToProject: (employeeId, projectId) => request(`/reports/employees/${employeeId}/projects/${projectId}/restore`, { method: 'POST' }),
+  deletePreviousMember: (recordId) => request(`/reports/previous-members/${recordId}`, { method: 'DELETE' }),
+
+  // Teams & Allocation (Manager Portal)
+  getTeams: (params = {}) => {
+    const query = new URLSearchParams();
+    Object.keys(params).forEach(k => {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        query.append(k, params[k]);
+      }
+    });
+    return request(`/teams${query.toString() ? `?${query.toString()}` : ''}`);
+  },
+  getTeam: (id) => request(`/teams/${id}`),
+  getMyTeamAllocation: () => request('/teams/my-allocation'),
+  createTeam: (data) => request('/teams', { method: 'POST', body: data }),
+  updateTeam: (id, data) => request(`/teams/${id}`, { method: 'PUT', body: data }),
+  deleteTeam: (id) => request(`/teams/${id}`, { method: 'DELETE' }),
+  addTeamMember: (id, data) => request(`/teams/${id}/members`, { method: 'POST', body: data }),
+  removeTeamMember: (id, userId) => request(`/teams/${id}/members/${userId}`, { method: 'DELETE' }),
+  allocateTeamProject: (id, data) => request(`/teams/${id}/projects`, { method: 'POST', body: data }),
+  deallocateTeamProject: (id, projectId) => request(`/teams/${id}/projects/${projectId}`, { method: 'DELETE' }),
+
+  // Project Co-Management & Sharing
+  getManageableProjects: () => request('/teams/manageable-projects'),
+  getProjectShares: (projectId) => request(`/teams/projects/${projectId}/shares`),
+  shareProject: (projectId, data) => request(`/teams/projects/${projectId}/share`, { method: 'POST', body: data }),
+  revokeProjectShare: (projectId, userId) => request(`/teams/projects/${projectId}/share/${userId}`, { method: 'DELETE' }),
+
+  // Personal Self-Logs (Tasks, Notes, Calendar)
+  getSelfLogs: (params = {}) => {
+    const query = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        query.append(key, params[key]);
+      }
+    });
+    return request(`/self-logs${query.toString() ? `?${query.toString()}` : ''}`);
+  },
+  createSelfLog: (data) => request('/self-logs', { method: 'POST', body: data }),
+  updateSelfLog: (id, data) => request(`/self-logs/${id}`, { method: 'PUT', body: data }),
+  deleteSelfLog: (id) => request(`/self-logs/${id}`, { method: 'DELETE' }),
+
+  // System Audit Logs (Change History)
+  getAuditLogs: (params = {}) => {
+    const query = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        query.append(key, params[key]);
+      }
+    });
+    return request(`/audit-logs?${query.toString()}`);
+  },
+
+  // Manager Control & View Permissions
+  getManagersWithPermissions: () => request('/manager-control/managers'),
+  getManagerPermissions: (userId) => request(`/manager-control/${userId}`),
+  updateManagerPermissions: (userId, data) => request(`/manager-control/${userId}`, { method: 'PUT', body: data }),
+  applyManagerPreset: (userId, preset) => request('/manager-control/apply-preset', { method: 'POST', body: { user_id: userId, preset } }),
+  getMyPermissions: () => request('/manager-control/my-permissions'),
+
+  // User Profile, Avatar & Password
+  updateProfile: (data) => request('/auth/profile', { method: 'PUT', body: data }),
+  uploadAvatar: (formData) => request('/auth/avatar', { method: 'POST', body: formData }),
+  removeAvatar: () => request('/auth/avatar', { method: 'DELETE' }),
+  changePassword: (data) => request('/auth/change-password', { method: 'PUT', body: data }),
+
+  // User In-App Notifications
+  getNotifications: (params = {}) => {
+    const query = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+        query.append(key, params[key]);
+      }
+    });
+    return request(`/notifications${query.toString() ? `?${query.toString()}` : ''}`);
+  },
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsRead: () => request('/notifications/read-all', { method: 'PATCH' }),
+  deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
+  clearAllNotifications: () => request('/notifications/clear-all', { method: 'DELETE' })
 };
+
 
