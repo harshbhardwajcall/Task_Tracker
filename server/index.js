@@ -5,14 +5,16 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initDatabase } from './db/index.js';
-import authRoutes from './routes/auth.js';
-import taskRoutes from './routes/tasks.js';
-import metadataRoutes from './routes/metadata.js';
-import teamRoutes from './routes/teams.js';
-import selfLogRoutes from './routes/selfLogs.js';
-import auditLogRoutes from './routes/auditLogs.js';
-import managerControlRoutes from './routes/managerControl.js';
-import notificationRoutes from './routes/notifications.js';
+import {
+  authRoutes,
+  taskRoutes,
+  metadataRoutes,
+  teamRoutes,
+  selfLogRoutes,
+  auditLogRoutes,
+  managerControlRoutes,
+  notificationRoutes
+} from './routes/index.js';
 import { startDeadlineWatcher } from './utils/emailHelper.js';
 import { startTaskLoopWatcher } from './utils/taskLoopHelper.js';
 
@@ -32,7 +34,12 @@ const uploadDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadDir));
+app.use('/uploads', express.static(uploadDir, {
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+  }
+}));
 
 // Initialize Database Schema
 initDatabase();

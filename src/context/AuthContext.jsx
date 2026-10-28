@@ -3,45 +3,6 @@ import { api, getActiveUserId, setActiveUserId, setAuthToken, clearAuth } from '
 
 const AuthContext = createContext();
 
-export const demoAccounts = [
-  {
-    role: 'Admin',
-    name: 'System Admin',
-    email: 'admin@company.com',
-    password: 'password123',
-    dept: 'Management',
-    badge: 'Admin Access',
-    color: 'amber'
-  },
-  {
-    role: 'Employee',
-    name: 'Rahul Sharma',
-    email: 'rahul@company.com',
-    password: 'password123',
-    dept: 'Development',
-    badge: 'Employee (Dev)',
-    color: 'emerald'
-  },
-  {
-    role: 'Employee',
-    name: 'Priya Patel',
-    email: 'priya@company.com',
-    password: 'password123',
-    dept: 'Design',
-    badge: 'Employee (Design)',
-    color: 'purple'
-  },
-  {
-    role: 'Employee',
-    name: 'Dev Kumar',
-    email: 'dev@company.com',
-    password: 'password123',
-    dept: 'Testing',
-    badge: 'Employee (QA)',
-    color: 'sky'
-  }
-];
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [availableUsers, setAvailableUsers] = useState([]);
@@ -139,7 +100,6 @@ export function AuthProvider({ children }) {
       value={{
         user,
         availableUsers,
-        demoAccounts,
         login,
         logout,
         refreshUsers,

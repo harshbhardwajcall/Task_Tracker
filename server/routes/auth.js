@@ -70,8 +70,8 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ message: 'Wrong email or password. Please try again.' });
   }
 
-  // Validate password
-  const isMatch = bcrypt.compareSync(password.trim(), user.password) || password.trim() === 'password123';
+  // Validate password strictly
+  const isMatch = bcrypt.compareSync(password.trim(), user.password);
   if (!isMatch) {
     return res.status(401).json({ message: 'Wrong email or password. Please try again.' });
   }
@@ -271,8 +271,8 @@ router.put('/change-password', authenticateUser, (req, res) => {
     return res.status(404).json({ message: 'User not found.' });
   }
 
-  // Verify current password
-  const isMatch = bcrypt.compareSync(currentPassword.trim(), user.password) || currentPassword.trim() === 'password123';
+  // Verify current password strictly
+  const isMatch = bcrypt.compareSync(currentPassword.trim(), user.password);
   if (!isMatch) {
     return res.status(400).json({ message: 'Current password is incorrect. Please try again.' });
   }
@@ -293,8 +293,8 @@ router.put('/change-password', authenticateUser, (req, res) => {
   res.json({ message: 'Password changed successfully!' });
 });
 
-// Get list of all available user profiles
-router.get('/users', (req, res) => {
+// Get list of all available user profiles (Authenticated users only)
+router.get('/users', authenticateUser, (req, res) => {
   const users = db.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
     FROM users u
@@ -309,8 +309,8 @@ router.get('/users', (req, res) => {
   res.json({ users });
 });
 
-// Set active user by ID
-router.get('/user/:id', (req, res) => {
+// Set active user by ID (Authenticated users only)
+router.get('/user/:id', authenticateUser, (req, res) => {
   const user = db.prepare(`
     SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
     FROM users u
@@ -350,7 +350,11 @@ router.post('/admin/users', authenticateUser, (req, res) => {
     return res.status(400).json({ message: 'A user with this email address already exists.' });
   }
 
-  const userPassword = password && password.trim() ? password.trim() : 'password123';
+  if (!password || typeof password !== 'string' || password.trim().length < 6) {
+    return res.status(400).json({ message: 'Initial password is required and must be at least 6 characters long.' });
+  }
+
+  const userPassword = password.trim();
   const hashedPassword = bcrypt.hashSync(userPassword, 10);
   const userRole = role === 'Admin' ? 'Admin' : (role === 'Manager' ? 'Manager' : (role === 'Intern' ? 'Intern' : 'Employee'));
   const userTitle = title && title.trim()

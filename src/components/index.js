@@ -2,25 +2,8 @@
 export { default as Navbar } from './layout/Navbar';
 export { default as TopNav } from './layout/TopNav';
 
-// Modals
-export { default as AddDepartmentModal } from './modals/AddDepartmentModal';
-export { default as EditDepartmentModal } from './modals/EditDepartmentModal';
-export { default as AddEmployeeModal } from './modals/AddEmployeeModal';
-export { default as AddProjectModal } from './modals/AddProjectModal';
-export { default as EditProjectModal } from './modals/EditProjectModal';
-export { default as ViewProjectModal } from './modals/ViewProjectModal';
-export { default as CreateTaskModal } from './modals/CreateTaskModal';
-export { default as EditTaskModal } from './modals/EditTaskModal';
-export { default as EditUserModal } from './modals/EditUserModal';
-export { default as EmployeeAnalyticsModal } from './modals/EmployeeAnalyticsModal';
-export { default as ResetPasswordModal } from './modals/ResetPasswordModal';
-export { default as TaskDetailsModal } from './modals/TaskDetailsModal';
-export { default as CreateTeamModal } from './modals/CreateTeamModal';
-export { default as EditTeamModal } from './modals/EditTeamModal';
-export { default as ViewTeamModal } from './modals/ViewTeamModal';
-export { default as ProjectDetailsModal } from './modals/ProjectDetailsModal';
-export { default as AddTeamMemberModal } from './modals/AddTeamMemberModal';
-export { default as ShareProjectModal } from './modals/ShareProjectModal';
+// Modals (Organized into /admin, /manager, and /tasks)
+export * from './modals';
 
 // Teams
 export { default as TeamCard } from './teams/TeamCard';

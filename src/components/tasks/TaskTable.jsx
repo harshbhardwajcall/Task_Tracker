@@ -1,7 +1,8 @@
 import React from 'react';
 import StatusBadge from '../ui/StatusBadge';
 import PriorityBadge from '../ui/PriorityBadge';
-import { Eye, Trash2, Calendar, FileText, MessageSquare, Paperclip, ShieldCheck, Pencil, Users, Repeat } from 'lucide-react';
+import { Eye, Trash2, Calendar, FileText, MessageSquare, Paperclip, ShieldCheck, Pencil, Users, Repeat, Clock } from 'lucide-react';
+import { formatCompletionTime, formatTotalDuration } from '../../utils/timeFormat';
 import { useAuth } from '../../context/AuthContext';
 
 export default function TaskTable({
@@ -49,7 +50,7 @@ export default function TaskTable({
               <th className="py-3.5 px-4">Department</th>
               <th className="py-3.5 px-4">Assigned</th>
               <th className="py-3.5 px-4">Due Date</th>
-              <th className="py-3.5 px-4">Completed</th>
+              <th className="py-3.5 px-4">Completed / Time Taken</th>
               <th className="py-3.5 px-4">Priority</th>
               <th className="py-3.5 px-4">Status</th>
               <th className="py-3.5 px-4 text-right">Actions</th>
@@ -195,8 +196,22 @@ export default function TaskTable({
                   </span>
                 </td>
 
-                <td className="py-3.5 px-4 text-black dark:text-slate-400 whitespace-nowrap font-semibold">
-                  {task.completed_date ? task.completed_date.split(' ')[0] : '—'}
+                <td className="py-3.5 px-4 whitespace-nowrap">
+                  {task.status === 'Completed' || task.completed_date ? (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400 text-xs">
+                        {formatCompletionTime(task.completed_at || task.completed_date) || 'Completed'}
+                      </span>
+                      {formatTotalDuration(task) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-neutral-400">
+                          <Clock className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>Took: <strong className="text-black dark:text-neutral-200 font-mono">{formatTotalDuration(task)}</strong></span>
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 dark:text-neutral-500 text-xs">—</span>
+                  )}
                 </td>
 
                 <td className="py-3.5 px-4">

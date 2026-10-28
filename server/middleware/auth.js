@@ -19,54 +19,40 @@ export function generateToken(user) {
 }
 
 export function authenticateUser(req, res, next) {
-  // Check for X-User-Id header (for login-free profile switching)
-  const customUserId = req.headers['x-user-id'];
-  if (customUserId) {
+  // Check Authorization Bearer header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Authentication required. Please log in.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication token missing.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({ message: 'Invalid session token.' });
+    }
+
+    // Fetch fresh user record from database
     const user = db.prepare(`
       SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       WHERE u.id = ?
-    `).get(customUserId);
+    `).get(decoded.id);
 
-    if (user) {
-      req.user = user;
-      return next();
+    if (!user) {
+      return res.status(401).json({ message: 'Account not found or deactivated.' });
     }
+
+    req.user = user;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Session expired or invalid. Please sign in again.' });
   }
-
-  // Check Authorization Bearer header
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-      return next();
-    } catch (err) {
-      // fallback to default manager
-    }
-  }
-
-  // Default auto-login user (System Admin or Manager A) if no auth header passed
-  const defaultUser = db.prepare(`
-    SELECT u.id, u.name, u.email, u.role, u.department_id, COALESCE(u.title, 'Employee') as title, u.avatar, d.name as department_name
-    FROM users u
-    LEFT JOIN departments d ON u.department_id = d.id
-    WHERE u.role = 'Admin' OR u.id = 1
-    ORDER BY u.role ASC LIMIT 1
-  `).get();
-
-  req.user = defaultUser || {
-    id: 1,
-    name: 'System Admin',
-    email: 'admin@company.com',
-    role: 'Admin',
-    department_id: 1,
-    department_name: 'Development'
-  };
-
-  next();
 }
 
 export function requireRole(...allowedRoles) {

@@ -45,9 +45,9 @@ router.get('/employees', authenticateUser, (req, res) => {
   res.json({ employees });
 });
 
-// Add a new employee / intern
-router.post('/employees', (req, res) => {
-  const { name, email, department_id, title } = req.body;
+// Add a new employee / intern (Admin & Manager only)
+router.post('/employees', authenticateUser, requireRole('Admin', 'Manager'), (req, res) => {
+  const { name, email, department_id, title, password } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ message: 'Employee name is required.' });
@@ -66,7 +66,10 @@ router.post('/employees', (req, res) => {
   }
 
   const empTitle = title && title.trim() ? title.trim() : 'Employee';
-  const hashedPassword = bcrypt.hashSync('password123', 10);
+  const temporaryPassword = (password && typeof password === 'string' && password.trim().length >= 6)
+    ? password.trim()
+    : 'Emp@' + Math.floor(100000 + Math.random() * 900000);
+  const hashedPassword = bcrypt.hashSync(temporaryPassword, 10);
 
   db.prepare(`
     INSERT INTO users (name, email, password, role, department_id, title)
@@ -98,7 +101,7 @@ router.post('/employees', (req, res) => {
         name: newEmployee.name,
         role: newEmployee.role,
         title: newEmployee.title,
-        temporaryPassword: 'password123',
+        temporaryPassword: temporaryPassword,
         createdByName: req.user ? req.user.name : 'System Administrator'
       });
     } catch (mailErr) {
@@ -124,8 +127,8 @@ function logTaskHistory(taskId, userId, userName, action, oldValue, newValue) {
   }
 }
 
-// Delete an employee / intern permanently from database!
-router.delete('/employees/:id', authenticateUser, (req, res) => {
+// Delete an employee / intern permanently from database! (Admin & Manager only)
+router.delete('/employees/:id', authenticateUser, requireRole('Admin', 'Manager'), (req, res) => {
   const employeeId = req.params.id;
 
   const emp = db.prepare("SELECT * FROM users WHERE id = ?").get(employeeId);
@@ -420,8 +423,8 @@ router.delete('/job-titles/:id', authenticateUser, (req, res) => {
   }
 });
 
-// Create a new department
-router.post('/departments', (req, res) => {
+// Create a new department (Admin only)
+router.post('/departments', authenticateUser, requireRole('Admin'), (req, res) => {
   const { name, description } = req.body;
 
   if (!name || !name.trim()) {
@@ -460,8 +463,8 @@ router.post('/departments', (req, res) => {
   });
 });
 
-// Update a department
-router.put('/departments/:id', authenticateUser, (req, res) => {
+// Update a department (Admin only)
+router.put('/departments/:id', authenticateUser, requireRole('Admin'), (req, res) => {
   const departmentId = req.params.id;
   const { name, description } = req.body;
 
@@ -511,8 +514,8 @@ router.put('/departments/:id', authenticateUser, (req, res) => {
   });
 });
 
-// Delete a department permanently from database!
-router.delete('/departments/:id', authenticateUser, (req, res) => {
+// Delete a department permanently from database! (Admin only)
+router.delete('/departments/:id', authenticateUser, requireRole('Admin'), (req, res) => {
   const departmentId = req.params.id;
 
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(departmentId);
@@ -578,8 +581,8 @@ router.get('/projects', authenticateUser, (req, res) => {
   res.json({ projects });
 });
 
-// Create a new project
-router.post('/projects', authenticateUser, uploadProjectMedia.single('media_file'), (req, res) => {
+// Create a new project (Admin & Manager only)
+router.post('/projects', authenticateUser, requireRole('Admin', 'Manager'), uploadProjectMedia.single('media_file'), (req, res) => {
   const { name, department_id, description, links, remarks } = req.body;
   let media = req.body.media || '';
   if (req.file) {
@@ -667,8 +670,8 @@ router.post('/projects', authenticateUser, uploadProjectMedia.single('media_file
   });
 });
 
-// Update an existing project
-router.put('/projects/:id', authenticateUser, uploadProjectMedia.single('media_file'), (req, res) => {
+// Update an existing project (Admin & Manager only)
+router.put('/projects/:id', authenticateUser, requireRole('Admin', 'Manager'), uploadProjectMedia.single('media_file'), (req, res) => {
   const projectId = req.params.id;
   const { name, department_id, description, links, remarks } = req.body;
   let media = req.body.media;
@@ -741,9 +744,10 @@ router.put('/projects/:id', authenticateUser, uploadProjectMedia.single('media_f
   });
 });
 
-// Delete a project permanently from database!
+// Delete a project permanently from database! (Admin & Manager only)
 router.delete('/projects/:id', authenticateUser, (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+  const userRole = (req.user?.role || '').toLowerCase();
+  if (userRole !== 'admin' && userRole !== 'manager') {
     return res.status(403).json({ message: 'Forbidden. Only managers and administrators can delete projects.' });
   }
 

@@ -2,6 +2,10 @@ import initSqlJs from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -260,12 +264,22 @@ export function initDatabase() {
     );
   `);
 
-  // Migrate users table if check constraint fails on Admin
+  // Migrate users table if check constraint fails on Admin & bootstrap initial admin from .env
   try {
-    const testAdmin = db.prepare("SELECT id FROM users WHERE email = 'admin@company.com'").get();
-    if (!testAdmin) {
+    const adminExists = db.prepare("SELECT id FROM users WHERE role = 'Admin'").get();
+    if (!adminExists) {
+      const defaultEmail = (process.env.DEFAULT_ADMIN_EMAIL || '').trim().toLowerCase();
+      const defaultPass = process.env.DEFAULT_ADMIN_PASSWORD || '';
+
+      if (!defaultEmail || !defaultPass) {
+        console.warn('⚠️ No Administrator account found in database. Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD in your .env file to bootstrap initial admin.');
+        return;
+      }
+
+      const hashedPass = bcrypt.hashSync(defaultPass, 10);
+
       try {
-        db.prepare("INSERT INTO users (name, email, password, role, department_id, title) VALUES ('System Admin', 'admin@company.com', '$2a$10$ropJdqQoLfbyLwV2AWL6TO2OP/9GLFHDEs7a6r3ez15Igg1hpRi.6', 'Admin', 1, 'Administrator')").run();
+        db.prepare("INSERT INTO users (name, email, password, role, department_id, title) VALUES ('System Admin', ?, ?, 'Admin', 1, 'Administrator')").run(defaultEmail, hashedPass);
       } catch (insertErr) {
         // Table has old CHECK constraint - rebuild users table
         db.exec(`
@@ -287,7 +301,7 @@ export function initDatabase() {
         `);
 
         // Now insert admin
-        db.prepare("INSERT INTO users (name, email, password, role, department_id, title) VALUES ('System Admin', 'admin@company.com', '$2a$10$ropJdqQoLfbyLwV2AWL6TO2OP/9GLFHDEs7a6r3ez15Igg1hpRi.6', 'Admin', 1, 'Administrator')").run();
+        db.prepare("INSERT INTO users (name, email, password, role, department_id, title) VALUES ('System Admin', ?, ?, 'Admin', 1, 'Administrator')").run(defaultEmail, hashedPass);
       }
     }
   } catch (e) {
@@ -643,8 +657,26 @@ export function initDatabase() {
     if (!projCols.some(c => c.name === 'created_by')) {
       db.exec("ALTER TABLE projects ADD COLUMN created_by INTEGER DEFAULT NULL");
     }
+
+    // Ensure team_shares table exists for co-managing shared teams
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS team_shares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        shared_by INTEGER NOT NULL,
+        permission TEXT DEFAULT 'manage',
+        shared_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(team_id, user_id),
+        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (shared_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_team_shares_user ON team_shares(user_id);
+      CREATE INDEX IF NOT EXISTS idx_team_shares_team ON team_shares(team_id);
+    `);
   } catch (err) {
-    console.error('Error initializing project_shares table:', err);
+    console.error('Error initializing shares tables:', err);
   }
 
   // Purge expired recycle bin tasks (older than 10 days)

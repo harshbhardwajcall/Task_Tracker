@@ -9,12 +9,10 @@ dist-ssr/
 build/
 *.local
 
-# Environment variables & secrets (CRITICAL: Never commit to git)
+# Environment variables & secrets (CRITICAL: Never commit secrets to git)
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
 *.env
 
 # SQLite Database & Storage (CRITICAL: Contains employee data & credentials)
@@ -25,6 +23,7 @@ build/
 *.sqlite
 *.sqlite3
 server/db/*.db
+server/db/*.sqlite*
 
 # User Uploaded Attachments & Media (Keep folder structure only via .gitkeep)
 uploads/*
@@ -33,10 +32,20 @@ uploads/avatars/*
 !uploads/avatars/.gitkeep
 
 # Temporary scratch & debug scripts
-scratch_*.js
+scratch*
+scratch_*.*
 scratch/
 temp/
 *.tmp
+test_run*
+
+# Caches & Test Coverage
+.cache/
+.parcel-cache/
+.vite/
+.eslintcache
+coverage/
+.turbo/
 
 # Logs
 logs/
@@ -56,6 +65,7 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+*~
 
 # OS Generated Files
 .DS_Store
@@ -65,3 +75,4 @@ pnpm-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini

@@ -48,7 +48,8 @@ export default function Navbar({
     clearAll,
     openTaskFromNotification,
     browserPermission,
-    requestBrowserPermission
+    requestBrowserPermission,
+    testWindowsNotification
   } = useNotifications();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -294,21 +295,48 @@ export default function Navbar({
                     </div>
                   </div>
 
-                  {/* Browser Alert Permission Banner if not yet granted */}
-                  {browserPermission === 'default' && (
-                    <div className="p-2.5 bg-sky-50 dark:bg-sky-950/40 border-b border-sky-100 dark:border-sky-900/40 flex items-center justify-between gap-2 text-xs">
-                      <span className="text-[11px] text-sky-800 dark:text-sky-300">
-                        Enable browser tab & desktop alerts?
+                  {/* Windows Desktop Notifications Status / Prompt */}
+                  <div className="px-3 py-2 bg-slate-50 dark:bg-zinc-900/60 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between gap-2 text-xs">
+                    {browserPermission === 'granted' ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>Windows Alerts: Active</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            testWindowsNotification();
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-neutral-300 text-[10px] font-semibold transition cursor-pointer"
+                          title="Send a sample Windows notification to test"
+                        >
+                          Test Windows Alert
+                        </button>
+                      </>
+                    ) : browserPermission === 'denied' ? (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                        ⚠️ Windows alerts blocked in browser site settings.
                       </span>
-                      <button
-                        type="button"
-                        onClick={requestBrowserPermission}
-                        className="px-2 py-0.5 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold shrink-0 shadow-xs cursor-pointer"
-                      >
-                        Enable
-                      </button>
-                    </div>
-                  )}
+                    ) : (
+                      <>
+                        <span className="text-[11px] text-sky-700 dark:text-sky-300">
+                          Enable Windows alerts like WhatsApp?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestBrowserPermission();
+                          }}
+                          className="px-2.5 py-1 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold shrink-0 shadow-xs cursor-pointer"
+                        >
+                          Enable
+                        </button>
+                      </>
+                    )}
+                  </div>
 
                   {/* Notifications List */}
                   <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60">

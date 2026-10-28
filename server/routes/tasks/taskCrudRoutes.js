@@ -327,10 +327,25 @@ router.put('/:id', authenticateUser, (req, res) => {
   }
 
   let completedDate = existingTask.completed_date;
+  let startedAt = existingTask.started_at;
+  let completedAt = existingTask.completed_at;
+  let completionDurationHours = existingTask.completion_duration_hours || 0;
+
+  if (status === 'In Progress' && !startedAt) {
+    startedAt = new Date().toISOString();
+  }
+
   if (status === 'Completed' && existingTask.status !== 'Completed') {
     completedDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    completedAt = new Date().toISOString();
+    const startPoint = new Date(startedAt || existingTask.created_at);
+    const endPoint = new Date(completedAt);
+    const diffHours = Math.max(0.01, (endPoint - startPoint) / (1000 * 60 * 60));
+    completionDurationHours = Math.round(diffHours * 10) / 10;
   } else if (status && status !== 'Completed') {
     completedDate = null;
+    completedAt = null;
+    completionDurationHours = 0;
   }
 
   const newDueDate = req.body.hasOwnProperty('due_date') ? (due_date ? due_date : null) : existingTask.due_date;
@@ -423,6 +438,9 @@ router.put('/:id', authenticateUser, (req, res) => {
       start_date = COALESCE(?, start_date),
       due_date = ?,
       completed_date = ?,
+      completed_at = ?,
+      completion_duration_hours = ?,
+      started_at = ?,
       priority = COALESCE(?, priority),
       status = COALESCE(?, status),
       manager_remarks = COALESCE(?, manager_remarks),
@@ -443,6 +461,9 @@ router.put('/:id', authenticateUser, (req, res) => {
     start_date !== undefined ? start_date : existingTask.start_date,
     newDueDate,
     completedDate,
+    completedAt,
+    completionDurationHours,
+    startedAt,
     priority !== undefined ? priority : existingTask.priority,
     status !== undefined ? status : existingTask.status,
     manager_remarks !== undefined ? manager_remarks : existingTask.manager_remarks,
@@ -580,10 +601,15 @@ router.patch('/:id/status', authenticateUser, (req, res) => {
     return res.status(404).json({ message: 'Task not found.' });
   }
 
-  // Permission Check: Status can be changed by Admin, the assigned employee, or a dependency/collaborator
+  // Permission Check: Status can be changed by Admin, Manager, the task assigner, the assigned employee, or a dependency/collaborator
+  const isAssigner = Number(existingTask.assigned_by) === Number(req.user.id);
+  const isAssignee = Number(existingTask.assigned_to) === Number(req.user.id);
+  const isAdmin = req.user.role === 'Admin';
+  const isManager = req.user.role === 'Manager';
   const isDependency = db.prepare('SELECT 1 FROM task_dependencies WHERE task_id = ? AND user_id = ?').get(taskId, req.user.id);
-  if (req.user.role !== 'Admin' && Number(existingTask.assigned_to) !== Number(req.user.id) && !isDependency) {
-    return res.status(403).json({ message: 'Status can only be updated by the assigned employee, collaborators, or an Administrator.' });
+
+  if (!isAdmin && !isManager && !isAssigner && !isAssignee && !isDependency) {
+    return res.status(403).json({ message: 'Permission denied. Only the assigned employee, collaborators, assigner, or a Manager/Admin can update task status.' });
   }
 
   let completedDate = existingTask.completed_date;
@@ -601,7 +627,7 @@ router.patch('/:id/status', authenticateUser, (req, res) => {
     // Calculate duration in hours from started_at (or created_at) to completed_at
     const startPoint = new Date(startedAt || existingTask.created_at);
     const endPoint = new Date(completedAt);
-    const diffHours = Math.max(0.1, (endPoint - startPoint) / (1000 * 60 * 60));
+    const diffHours = Math.max(0.01, (endPoint - startPoint) / (1000 * 60 * 60));
     completionDurationHours = Math.round(diffHours * 10) / 10;
   } else if (status !== 'Completed') {
     completedDate = null;

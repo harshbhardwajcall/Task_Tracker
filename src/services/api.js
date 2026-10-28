@@ -229,8 +229,15 @@ export const api = {
   allocateTeamProject: (id, data) => request(`/teams/${id}/projects`, { method: 'POST', body: data }),
   deallocateTeamProject: (id, projectId) => request(`/teams/${id}/projects/${projectId}`, { method: 'DELETE' }),
 
+  // Team / Squad Sharing & Co-Management
+  getManageableTeams: () => request('/teams/manageable-teams'),
+  getTeamShares: (teamId) => request(`/teams/team-shares/${teamId}`),
+  shareTeam: (teamId, data) => request(`/teams/team-shares/${teamId}`, { method: 'POST', body: data }),
+  revokeTeamShare: (teamId, userId) => request(`/teams/team-shares/${teamId}/${userId}`, { method: 'DELETE' }),
+
   // Project Co-Management & Sharing
   getManageableProjects: () => request('/teams/manageable-projects'),
+  getEligibleManagers: () => request('/teams/managers'),
   getProjectShares: (projectId) => request(`/teams/projects/${projectId}/shares`),
   shareProject: (projectId, data) => request(`/teams/projects/${projectId}/share`, { method: 'POST', body: data }),
   revokeProjectShare: (projectId, userId) => request(`/teams/projects/${projectId}/share/${userId}`, { method: 'DELETE' }),

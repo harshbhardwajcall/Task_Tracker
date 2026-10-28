@@ -22,10 +22,7 @@ Copy-Item .env.example .env
 # On Mac/Linux (Bash):
 cp .env.example .env
 
-# 4. Initialize database tables & seed sample accounts
-npm run seed
-
-# 5. Start the application
+# 4. Start the application
 npm run dev
 ```
 
@@ -49,33 +46,26 @@ npm -v
 
 ---
 
-## 🔑 Default Login Credentials
+## 🔑 Initial Administrator Login Credentials
 
-After running `npm run seed`, the system comes pre-configured with demo accounts across all access tiers:
+When the backend boots up for the first time, the system automatically creates the initial System Administrator:
 
-| Role | Portal Tab | Email | Password | What You Can Do |
-|---|---|---|---|---|
-| **System Admin** | **Admin** | `admin@company.com` | `password123` | Full system control, manager governance, reports, audit logs & recycle bin |
-| **Developer (Lead)** | **Employee** | `rahul@company.com` | `password123` | Manage squads, tasks, dependencies & reports |
-| **UI/UX Designer** | **Employee** | `priya@company.com` | `password123` | Task tracking, attachments & comments |
-| **Marketing** | **Employee** | `alex@company.com` | `password123` | Task updates, self-logs & personal notes |
-| **QA / Tester** | **Employee** | `dev@company.com` | `password123` | Bug reporting, testing checklists & status flows |
+| Role | Portal Mode | Environment Variables | Notes |
+|---|---|---|---|
+| **System Admin** | **Admin Portal** | `DEFAULT_ADMIN_EMAIL` & `DEFAULT_ADMIN_PASSWORD` | Configured securely in `.env` |
 
-> **Tip:** On the login screen, select the **"Admin"** tab if logging in as `admin@company.com`, or the **"Employee"** tab for employee accounts.
+> **Note:** No fake demo users or dummy tasks are generated. Once logged in as Administrator, you can create your actual company departments, teams, managers, and employees directly from the Admin Portal.
 
 ### 🚀 Step-by-Step First Login Walkthrough
 
 1. Open your browser and navigate to **`http://localhost:5173`**.
-2. At the top of the login panel, select your portal mode:
-   - **To log in as Admin:** Ensure the **"Admin Portal"** tab (with the Shield icon) is selected.
-   - **To log in as Employee:** Click the **"Employee Portal"** tab (with the User icon).
-3. Enter the default credentials:
-   - **Work Email:** `admin@company.com`
-   - **Password:** `password123`
+2. Click the **"Admin Login"** toggle button at the bottom of the login panel to switch to Admin mode.
+3. Enter your administrator credentials as defined in `.env`:
+   - **Work Email:** (value of `DEFAULT_ADMIN_EMAIL` in `.env`)
+   - **Password:** (value of `DEFAULT_ADMIN_PASSWORD` in `.env`)
 4. Click **"Sign In as Admin"**.
-5. You will immediately be authenticated and redirected to the **Admin Management Dashboard**, where you can manage teams, projects, employees, and settings.
-
-*(To test as an employee later, click the user profile icon in the top-right corner to log out, choose the **Employee Portal** tab, and sign in with `rahul@company.com` / `password123`).*
+5. You will immediately be authenticated and redirected to the **Admin Management Dashboard**, where you can manage teams, projects, real employees, and system settings.
+6. *(Recommended)* Navigate to **Profile & Settings** to update your administrator password for production security.
 
 ---
 
@@ -111,7 +101,6 @@ Run these scripts from the project root:
 | Command | Description |
 |---|---|
 | `npm run dev` | Starts both the **Express backend** (port `5000`) and the **Vite frontend** (port `5173`) concurrently |
-| `npm run seed` | Re-initializes SQLite database tables and seeds demo departments, projects, and users |
 | `npm run build` | Compiles the production-ready React bundle into the `dist/` directory |
 | `npm run preview` | Previews the compiled production build locally |
 | `npm run test` | Runs the automated backend API test suite |
@@ -148,12 +137,11 @@ If another application is running on port `5000`:
   - **Windows:** `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess | Stop-Process`
   - **Mac/Linux:** `npx kill-port 5000`
 
-### 2. "Wrong email or password. Please try again"
-If you modified users or want a clean fresh database:
-```bash
-npm run seed
-```
-This will recreate all default tables and reset the default `admin@company.com` / `password123` credentials.
+### 2. "How to reset the database to a blank slate?"
+To start with a completely fresh, empty database:
+- Stop the running development server (`Ctrl + C`).
+- Delete `server/db/tracker.db`.
+- Run `npm run dev`. The server will regenerate fresh tables and bootstrap the initial Admin from `.env`.
 
 ### 3. "Which files should I NEVER commit to Git?"
 - **`.env`** (Contains your secrets and email passwords).

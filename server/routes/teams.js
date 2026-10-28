@@ -71,8 +71,12 @@ router.get('/', authenticateUser, (req, res) => {
           JOIN project_shares ps ON tp.project_id = ps.project_id
           WHERE tp.team_id = t.id AND ps.user_id = ?
         )
+        OR EXISTS (
+          SELECT 1 FROM team_shares ts
+          WHERE ts.team_id = t.id AND ts.user_id = ?
+        )
       )`;
-      params.push(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id);
+      params.push(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id);
     } else if (manager_id) {
       whereClause = `WHERE (
         t.manager_id = ? 
@@ -120,10 +124,16 @@ router.get('/', authenticateUser, (req, res) => {
         (SELECT COALESCE(SUM(CASE WHEN tsk.status = 'Not Started' THEN 1 ELSE 0 END), 0) FROM tasks tsk WHERE tsk.deleted_at IS NULL AND (tsk.team_id = t.id OR tsk.project_id IN (SELECT project_id FROM team_projects WHERE team_id = t.id))) as not_started_tasks,
         (SELECT COALESCE(SUM(CASE WHEN tsk.status = 'Overdue' OR (tsk.due_date < date('now') AND tsk.status != 'Completed') THEN 1 ELSE 0 END), 0) FROM tasks tsk WHERE tsk.deleted_at IS NULL AND (tsk.team_id = t.id OR tsk.project_id IN (SELECT project_id FROM team_projects WHERE team_id = t.id))) as overdue_tasks,
         CASE 
-          WHEN EXISTS (
-            SELECT 1 FROM team_projects tp 
-            JOIN project_shares ps ON tp.project_id = ps.project_id 
-            WHERE tp.team_id = t.id AND ps.user_id = ${currentUserId}
+          WHEN (
+            EXISTS (
+              SELECT 1 FROM team_projects tp 
+              JOIN project_shares ps ON tp.project_id = ps.project_id 
+              WHERE tp.team_id = t.id AND ps.user_id = ${currentUserId}
+            )
+            OR EXISTS (
+              SELECT 1 FROM team_shares ts 
+              WHERE ts.team_id = t.id AND ts.user_id = ${currentUserId}
+            )
           ) AND t.manager_id != ${currentUserId} THEN 1 
           ELSE 0 
         END as is_co_managed_squad
@@ -319,6 +329,519 @@ router.get('/my-allocation', authenticateUser, (req, res) => {
   } catch (err) {
     console.error('Failed to get my allocation:', err);
     res.status(500).json({ message: 'Failed to retrieve team allocation' });
+  }
+});
+
+// ============================================================================
+// CO-MANAGEMENT & SHARED PROJECT ROUTES (must precede /:id)
+// ============================================================================
+
+// GET all managers eligible for sharing (excluding current user)
+router.get('/managers', authenticateUser, (req, res) => {
+  try {
+    const managers = db.prepare(`
+      SELECT u.id, u.name, u.email, u.role, u.avatar, d.name as department_name
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role IN ('Manager', 'Admin') AND u.id != ?
+      ORDER BY u.name ASC
+    `).all(req.user.id);
+    res.json({ managers });
+  } catch (err) {
+    console.error('Failed to get managers:', err);
+    res.status(500).json({ message: 'Failed to retrieve managers' });
+  }
+});
+
+// GET projects manageable and shareable by the current user
+router.get('/manageable-projects', authenticateUser, (req, res) => {
+  try {
+    const isUserAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+
+    if (!isUserAdmin && !isManager) {
+      return res.status(403).json({ message: 'Permission denied. Only Admins and Managers can share projects.' });
+    }
+
+    let projects = [];
+    if (isUserAdmin) {
+      projects = db.prepare(`
+        SELECT p.id, p.name, p.department_id, p.description, d.name as department_name,
+               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL) as total_tasks,
+               (SELECT COUNT(*) FROM project_shares ps WHERE ps.project_id = p.id) as shared_count,
+               0 as is_co_managed
+        FROM projects p
+        LEFT JOIN departments d ON p.department_id = d.id
+        ORDER BY p.name ASC
+      `).all();
+    } else {
+      // Projects that come under this manager:
+      // 1. In manager's department
+      // 2. Created by manager
+      // 3. Allocated to teams/squads managed by this manager
+      // 4. Tasks assigned to or created by this manager
+      // 5. Shared with this manager as co-manager
+      const managerProjectsSql = `
+        SELECT DISTINCT p.id, p.name, p.department_id, p.description, d.name as department_name,
+               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL) as total_tasks,
+               (SELECT COUNT(*) FROM project_shares ps WHERE ps.project_id = p.id) as shared_count,
+               CASE 
+                 WHEN EXISTS (SELECT 1 FROM project_shares ps WHERE ps.project_id = p.id AND ps.user_id = ?) THEN 1
+                 ELSE 0
+               END as is_co_managed
+        FROM projects p
+        LEFT JOIN departments d ON p.department_id = d.id
+        WHERE (p.department_id IS NOT NULL AND p.department_id = ?)
+           OR p.created_by = ?
+           OR EXISTS (
+             SELECT 1 FROM team_projects tp 
+             JOIN teams t ON tp.team_id = t.id 
+             WHERE tp.project_id = p.id AND (t.manager_id = ? OR t.created_by = ?)
+           )
+           OR EXISTS (
+             SELECT 1 FROM tasks tsk 
+             WHERE tsk.project_id = p.id AND (tsk.assigned_to = ? OR tsk.assigned_by = ?) AND tsk.deleted_at IS NULL
+           )
+           OR EXISTS (
+             SELECT 1 FROM project_shares ps 
+             WHERE ps.project_id = p.id AND ps.user_id = ?
+           )
+        ORDER BY p.name ASC
+      `;
+      projects = db.prepare(managerProjectsSql).all(
+        req.user.id,
+        req.user.department_id || 0,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id,
+        req.user.id
+      );
+
+      // Fallback: if the manager does not yet have any department or team allocation, return company projects
+      if (projects.length === 0) {
+        projects = db.prepare(`
+          SELECT p.id, p.name, p.department_id, p.description, d.name as department_name,
+                 (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL) as total_tasks,
+                 (SELECT COUNT(*) FROM project_shares ps WHERE ps.project_id = p.id) as shared_count,
+                 0 as is_co_managed
+          FROM projects p
+          LEFT JOIN departments d ON p.department_id = d.id
+          ORDER BY p.name ASC
+        `).all();
+      }
+    }
+
+    res.json({ projects });
+  } catch (err) {
+    console.error('Failed to get manageable projects:', err);
+    res.status(500).json({ message: 'Failed to retrieve manageable projects' });
+  }
+});
+
+// GET shares for a specific project
+router.get('/projects/:projectId/shares', authenticateUser, (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = db.prepare(`
+      SELECT p.*, d.name as department_name
+      FROM projects p
+      LEFT JOIN departments d ON p.department_id = d.id
+      WHERE p.id = ?
+    `).get(projectId);
+
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found.' });
+    }
+
+    // Current shared managers
+    const shared_managers = db.prepare(`
+      SELECT ps.id as share_id, ps.project_id, ps.user_id, ps.shared_by, ps.shared_at, ps.permission,
+             u.name, u.email, u.avatar, u.role, d.name as department_name,
+             sharer.name as shared_by_name
+      FROM project_shares ps
+      JOIN users u ON ps.user_id = u.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN users sharer ON ps.shared_by = sharer.id
+      WHERE ps.project_id = ?
+      ORDER BY ps.shared_at DESC
+    `).all(projectId);
+
+    const alreadySharedIds = new Set(shared_managers.map(m => Number(m.user_id)));
+    alreadySharedIds.add(Number(req.user.id));
+
+    // All other eligible managers
+    const allManagers = db.prepare(`
+      SELECT u.id, u.name, u.email, u.role, u.avatar, d.name as department_name
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role IN ('Manager', 'Admin') AND u.id != ?
+      ORDER BY u.name ASC
+    `).all(req.user.id);
+
+    // Available managers (not already shared on this project)
+    const available_managers = allManagers.filter(m => !alreadySharedIds.has(Number(m.id)));
+
+    res.json({
+      project,
+      shared_managers,
+      available_managers,
+      all_managers: allManagers,
+      is_co_managed: shared_managers.some(m => Number(m.user_id) === Number(req.user.id))
+    });
+  } catch (err) {
+    console.error('Failed to get project shares:', err);
+    res.status(500).json({ message: 'Failed to retrieve project shares' });
+  }
+});
+
+// SHARE PROJECT with one or more managers
+router.post('/projects/:projectId/share', authenticateUser, (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { manager_id, manager_ids } = req.body;
+
+    const targetIds = Array.isArray(manager_ids) ? manager_ids : (manager_id ? [manager_id] : []);
+    if (targetIds.length === 0) {
+      return res.status(400).json({ message: 'Please select at least one manager to share with.' });
+    }
+
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found.' });
+    }
+
+    // Permission check: Admin or Manager
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ message: 'Permission denied. Only Admins and Managers can share projects.' });
+    }
+
+    let sharedCount = 0;
+    const targetUsers = [];
+
+    for (const rawId of targetIds) {
+      const targetId = Number(rawId);
+      if (!targetId || targetId === req.user.id) continue;
+
+      const targetUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(targetId);
+      if (!targetUser || !['Manager', 'Admin'].includes(targetUser.role)) continue;
+
+      db.prepare(`
+        INSERT OR IGNORE INTO project_shares (project_id, user_id, shared_by, permission)
+        VALUES (?, ?, ?, 'manage')
+      `).run(Number(projectId), targetId, req.user.id);
+
+      sharedCount++;
+      targetUsers.push(targetUser);
+
+      createNotification({
+        userId: targetId,
+        senderId: req.user.id,
+        senderName: req.user.name,
+        type: 'PROJECT_SHARED',
+        entityType: 'Project',
+        entityId: Number(projectId),
+        title: 'Project Shared with You (Co-Manager)',
+        message: `${req.user.name} shared project "${project.name}" with you. You now have full management powers over this project.`
+      });
+
+      logSystemAction({
+        userId: req.user.id,
+        userName: req.user.name,
+        role: req.user.role,
+        action: 'SHARE_PROJECT',
+        entityType: 'Project',
+        entityId: Number(projectId),
+        details: `Shared project "${project.name}" with manager ${targetUser.name} (${targetUser.email}) as co-manager`
+      });
+    }
+
+    res.json({
+      message: `Project "${project.name}" shared with ${sharedCount} manager(s) successfully.`,
+      sharedCount,
+      targetUsers
+    });
+  } catch (err) {
+    console.error('Failed to share project:', err);
+    res.status(500).json({ message: 'Failed to share project' });
+  }
+});
+
+// REVOKE / UNSHARE PROJECT from a manager
+router.delete('/projects/:projectId/share/:userId', authenticateUser, (req, res) => {
+  try {
+    const { projectId, userId } = req.params;
+    const targetId = Number(userId);
+
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found.' });
+
+    const targetUser = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(targetId);
+
+    // Permission check: Admin or Manager or self
+    const isAdmin = req.user.role === 'Admin';
+    const isManager = req.user.role === 'Manager';
+    const isSelf = req.user.id === targetId;
+
+    if (!isAdmin && !isManager && !isSelf) {
+      return res.status(403).json({ message: 'Permission denied to remove co-manager from this project.' });
+    }
+
+    db.prepare('DELETE FROM project_shares WHERE project_id = ? AND user_id = ?').run(projectId, targetId);
+
+    logSystemAction({
+      userId: req.user.id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: 'REVOKE_PROJECT_SHARE',
+      entityType: 'Project',
+      entityId: Number(projectId),
+      details: `Revoked co-manager access of ${targetUser ? targetUser.name : `User ${targetId}`} for project "${project.name}"`
+    });
+
+    res.json({ message: `Co-management access revoked successfully.` });
+  } catch (err) {
+    console.error('Failed to revoke project share:', err);
+    res.status(500).json({ message: 'Failed to revoke project share' });
+  }
+});
+
+// ============================================================================
+// TEAM SHARING & CO-MANAGEMENT ROUTES (strictly Managers, no Admin, no Employee)
+// ============================================================================
+
+// GET teams created or managed by current manager for sharing
+router.get('/manageable-teams', authenticateUser, (req, res) => {
+  try {
+    const isUserAdmin = req.user.role === 'Admin';
+    let sql = '';
+    const params = [];
+
+    if (isUserAdmin) {
+      sql = `
+        SELECT t.id, t.name, t.description, t.manager_id, t.department_id, d.name as department_name,
+               u.name as manager_name,
+               (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as total_members,
+               (SELECT COUNT(*) FROM team_shares ts WHERE ts.team_id = t.id) as shared_count
+        FROM teams t
+        LEFT JOIN departments d ON t.department_id = d.id
+        LEFT JOIN users u ON t.manager_id = u.id
+        ORDER BY t.name ASC
+      `;
+    } else {
+      // Manager can select teams which he created, leads, or co-manages
+      sql = `
+        SELECT t.id, t.name, t.description, t.manager_id, t.department_id, d.name as department_name,
+               u.name as manager_name,
+               (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) as total_members,
+               (SELECT COUNT(*) FROM team_shares ts WHERE ts.team_id = t.id) as shared_count,
+               CASE 
+                 WHEN EXISTS (SELECT 1 FROM team_shares ts WHERE ts.team_id = t.id AND ts.user_id = ?) THEN 1
+                 ELSE 0
+               END as is_co_managed
+        FROM teams t
+        LEFT JOIN departments d ON t.department_id = d.id
+        LEFT JOIN users u ON t.manager_id = u.id
+        WHERE (t.created_by IS NOT NULL AND t.created_by = ?)
+           OR t.manager_id = ?
+           OR EXISTS (SELECT 1 FROM team_shares ts WHERE ts.team_id = t.id AND ts.user_id = ?)
+        ORDER BY t.name ASC
+      `;
+      params.push(req.user.id, req.user.id, req.user.id, req.user.id);
+    }
+
+    const teams = db.prepare(sql).all(...params);
+    res.json({ teams });
+  } catch (err) {
+    console.error('Failed to get manageable teams:', err);
+    res.status(500).json({ message: 'Failed to retrieve manageable teams' });
+  }
+});
+
+// GET shares for a specific team
+router.get('/team-shares/:teamId', authenticateUser, (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const team = db.prepare(`
+      SELECT t.*, d.name as department_name, u.name as manager_name
+      FROM teams t
+      LEFT JOIN departments d ON t.department_id = d.id
+      LEFT JOIN users u ON t.manager_id = u.id
+      WHERE t.id = ?
+    `).get(teamId);
+
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found.' });
+    }
+
+    // Shared managers for this team
+    const shared_managers = db.prepare(`
+      SELECT ts.id as share_id, ts.team_id, ts.user_id, ts.shared_by, ts.shared_at, ts.permission,
+             u.name, u.email, u.avatar, u.role, d.name as department_name,
+             sharer.name as shared_by_name
+      FROM team_shares ts
+      JOIN users u ON ts.user_id = u.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN users sharer ON ts.shared_by = sharer.id
+      WHERE ts.team_id = ?
+      ORDER BY ts.shared_at DESC
+    `).all(teamId);
+
+    const alreadySharedIds = new Set(shared_managers.map(m => Number(m.user_id)));
+    alreadySharedIds.add(Number(req.user.id));
+    if (team.manager_id) alreadySharedIds.add(Number(team.manager_id));
+    if (team.created_by) alreadySharedIds.add(Number(team.created_by));
+
+    // Also exclude whoever shared this team with the current manager (cannot share back to the sharer)
+    shared_managers.forEach(sm => {
+      if (Number(sm.user_id) === Number(req.user.id) && sm.shared_by) {
+        alreadySharedIds.add(Number(sm.shared_by));
+      }
+      if (sm.shared_by) {
+        alreadySharedIds.add(Number(sm.shared_by));
+      }
+    });
+
+    // ONLY other managers (role = 'Manager', NO Admin, NO Employee)
+    const allManagers = db.prepare(`
+      SELECT u.id, u.name, u.email, u.role, u.avatar, d.name as department_name
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role = 'Manager' AND u.id != ?
+      ORDER BY u.name ASC
+    `).all(req.user.id);
+
+    const available_managers = allManagers.filter(m => !alreadySharedIds.has(Number(m.id)));
+
+    res.json({
+      team,
+      shared_managers,
+      available_managers,
+      all_managers: allManagers
+    });
+  } catch (err) {
+    console.error('Failed to get team shares:', err);
+    res.status(500).json({ message: 'Failed to retrieve team shares' });
+  }
+});
+
+// SHARE TEAM with other managers
+router.post('/team-shares/:teamId', authenticateUser, (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { manager_id, manager_ids } = req.body;
+
+    const targetIds = Array.isArray(manager_ids) ? manager_ids : (manager_id ? [manager_id] : []);
+    if (targetIds.length === 0) {
+      return res.status(400).json({ message: 'Please select a manager to share with.' });
+    }
+
+    const team = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found.' });
+    }
+
+    // Permission check: Admin, creator, manager, or co-manager of the team
+    const isAdmin = req.user.role === 'Admin';
+    const isOwner = (team.created_by && Number(team.created_by) === Number(req.user.id)) || Number(team.manager_id) === Number(req.user.id);
+    const isCoManager = db.prepare('SELECT 1 FROM team_shares WHERE team_id = ? AND user_id = ?').get(teamId, req.user.id);
+
+    if (!isAdmin && !isOwner && !isCoManager) {
+      return res.status(403).json({ message: 'Permission denied. You can only share teams you created, manage, or co-manage.' });
+    }
+
+    let sharedCount = 0;
+    const targetUsers = [];
+
+    for (const rawId of targetIds) {
+      const targetId = Number(rawId);
+      if (!targetId || targetId === req.user.id) continue;
+
+      const targetUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ? AND role = "Manager"').get(targetId);
+      if (!targetUser) continue;
+
+      db.prepare(`
+        INSERT OR IGNORE INTO team_shares (team_id, user_id, shared_by, permission)
+        VALUES (?, ?, ?, 'manage')
+      `).run(Number(teamId), targetId, req.user.id);
+
+      sharedCount++;
+      targetUsers.push(targetUser);
+
+      createNotification({
+        userId: targetId,
+        senderId: req.user.id,
+        senderName: req.user.name,
+        type: 'TEAM_SHARED',
+        entityType: 'Team',
+        entityId: Number(teamId),
+        title: 'Team Shared with You (Co-Manager)',
+        message: `${req.user.name} gave you co-management access to team "${team.name}".`
+      });
+
+      logSystemAction({
+        userId: req.user.id,
+        userName: req.user.name,
+        role: req.user.role,
+        action: 'SHARE_TEAM',
+        entityType: 'Team',
+        entityId: Number(teamId),
+        details: `Shared team "${team.name}" with manager ${targetUser.name} (${targetUser.email})`
+      });
+    }
+
+    res.json({
+      message: `Team "${team.name}" shared with ${sharedCount} manager(s) successfully.`,
+      sharedCount,
+      targetUsers
+    });
+  } catch (err) {
+    console.error('Failed to share team:', err);
+    res.status(500).json({ message: 'Failed to share team' });
+  }
+});
+
+// REVOKE TEAM SHARE from a manager
+router.delete('/team-shares/:teamId/:userId', authenticateUser, (req, res) => {
+  try {
+    const { teamId, userId } = req.params;
+    const targetId = Number(userId);
+
+    const team = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+    if (!team) return res.status(404).json({ message: 'Team not found.' });
+
+    const targetUser = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(targetId);
+
+    const isAdmin = req.user.role === 'Admin';
+    const isOwner = (team.created_by && Number(team.created_by) === Number(req.user.id)) || Number(team.manager_id) === Number(req.user.id);
+    const isSelf = req.user.id === targetId;
+    const isSharer = db.prepare('SELECT 1 FROM team_shares WHERE team_id = ? AND user_id = ? AND shared_by = ?').get(teamId, targetId, req.user.id);
+    const isCoManager = db.prepare('SELECT 1 FROM team_shares WHERE team_id = ? AND user_id = ?').get(teamId, req.user.id);
+
+    if (!isAdmin && !isOwner && !isSelf && !isSharer && !isCoManager) {
+      return res.status(403).json({ message: 'Permission denied to remove co-manager from this team.' });
+    }
+
+    db.prepare('DELETE FROM team_shares WHERE team_id = ? AND user_id = ?').run(teamId, targetId);
+
+    logSystemAction({
+      userId: req.user.id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: 'REVOKE_TEAM_SHARE',
+      entityType: 'Team',
+      entityId: Number(teamId),
+      details: `Revoked co-manager access of ${targetUser ? targetUser.name : `User ${targetId}`} for team "${team.name}"`
+    });
+
+    res.json({ message: `Co-management access revoked successfully.` });
+  } catch (err) {
+    console.error('Failed to revoke team share:', err);
+    res.status(500).json({ message: 'Failed to revoke team share' });
   }
 });
 
@@ -893,253 +1416,5 @@ router.delete('/:id/projects/:projectId', authenticateUser, (req, res) => {
   }
 });
 
-// ============================================================================
-// CO-MANAGEMENT & SHARED PROJECT ROUTES
-// ============================================================================
-
-// GET projects manageable and shareable by the current user
-router.get('/manageable-projects', authenticateUser, (req, res) => {
-  try {
-    const isUserAdmin = req.user.role === 'Admin';
-    let sql = '';
-    const params = [];
-
-    if (isUserAdmin) {
-      sql = `
-        SELECT p.id, p.name, p.department_id, p.description, d.name as department_name,
-               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL) as total_tasks,
-               (SELECT COUNT(*) FROM project_shares ps WHERE ps.project_id = p.id) as shared_count,
-               0 as is_co_managed
-        FROM projects p
-        LEFT JOIN departments d ON p.department_id = d.id
-        ORDER BY p.name ASC
-      `;
-    } else {
-      sql = `
-        SELECT DISTINCT p.id, p.name, p.department_id, p.description, d.name as department_name,
-               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL) as total_tasks,
-               (SELECT COUNT(*) FROM project_shares ps WHERE ps.project_id = p.id) as shared_count,
-               CASE 
-                 WHEN EXISTS (SELECT 1 FROM project_shares ps WHERE ps.project_id = p.id AND ps.user_id = ?) THEN 1
-                 ELSE 0
-               END as is_co_managed
-        FROM projects p
-        LEFT JOIN departments d ON p.department_id = d.id
-        WHERE p.created_by = ?
-           OR EXISTS (
-             SELECT 1 FROM team_projects tp 
-             JOIN teams t ON tp.team_id = t.id 
-             WHERE tp.project_id = p.id AND (t.manager_id = ? OR t.created_by = ?)
-           )
-           OR EXISTS (
-             SELECT 1 FROM project_shares ps 
-             WHERE ps.project_id = p.id AND ps.user_id = ?
-           )
-        ORDER BY p.name ASC
-      `;
-      params.push(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id);
-    }
-
-    const projects = db.prepare(sql).all(...params);
-    res.json({ projects });
-  } catch (err) {
-    console.error('Failed to get manageable projects:', err);
-    res.status(500).json({ message: 'Failed to retrieve manageable projects' });
-  }
-});
-
-// GET shares for a specific project
-router.get('/projects/:projectId/shares', authenticateUser, (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const project = db.prepare(`
-      SELECT p.*, d.name as department_name
-      FROM projects p
-      LEFT JOIN departments d ON p.department_id = d.id
-      WHERE p.id = ?
-    `).get(projectId);
-
-    if (!project) {
-      return res.status(404).json({ message: 'Project not found.' });
-    }
-
-    // Get current shared managers
-    const shared_managers = db.prepare(`
-      SELECT ps.id as share_id, ps.project_id, ps.user_id, ps.shared_by, ps.shared_at, ps.permission,
-             u.name, u.email, u.avatar, u.role, d.name as department_name,
-             sharer.name as shared_by_name
-      FROM project_shares ps
-      JOIN users u ON ps.user_id = u.id
-      LEFT JOIN departments d ON u.department_id = d.id
-      LEFT JOIN users sharer ON ps.shared_by = sharer.id
-      WHERE ps.project_id = ?
-      ORDER BY ps.shared_at DESC
-    `).all(projectId);
-
-    // Get primary leads / owners for this project
-    const owners = db.prepare(`
-      SELECT DISTINCT u.id, u.name, u.email, u.role, d.name as department_name, 'Lead' as role_type
-      FROM users u
-      LEFT JOIN departments d ON u.department_id = d.id
-      WHERE u.id IN (
-        SELECT t.manager_id FROM teams t JOIN team_projects tp ON tp.team_id = t.id WHERE tp.project_id = ?
-        UNION
-        SELECT p.created_by FROM projects p WHERE p.id = ? AND p.created_by IS NOT NULL
-      )
-    `).all(projectId, projectId);
-
-    // Get all available managers/admins who don't have access yet
-    const existingUserIds = new Set([
-      ...shared_managers.map(m => m.user_id),
-      ...owners.map(o => o.id),
-      req.user.id
-    ]);
-
-    const allManagers = db.prepare(`
-      SELECT u.id, u.name, u.email, u.role, d.name as department_name
-      FROM users u
-      LEFT JOIN departments d ON u.department_id = d.id
-      WHERE u.role IN ('Manager', 'Admin')
-      ORDER BY u.name ASC
-    `).all();
-
-    const available_managers = allManagers.filter(m => !existingUserIds.has(m.id));
-
-    res.json({
-      project,
-      owners,
-      shared_managers,
-      available_managers,
-      is_co_managed: shared_managers.some(m => m.user_id === req.user.id)
-    });
-  } catch (err) {
-    console.error('Failed to get project shares:', err);
-    res.status(500).json({ message: 'Failed to retrieve project shares' });
-  }
-});
-
-// SHARE PROJECT with one or more managers
-router.post('/projects/:projectId/share', authenticateUser, (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { manager_id, manager_ids } = req.body;
-
-    const targetIds = Array.isArray(manager_ids) ? manager_ids : (manager_id ? [manager_id] : []);
-    if (targetIds.length === 0) {
-      return res.status(400).json({ message: 'Please select at least one manager to share with.' });
-    }
-
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
-    if (!project) {
-      return res.status(404).json({ message: 'Project not found.' });
-    }
-
-    // Permission check: Admin or authorized manager for this project
-    const isAdmin = req.user.role === 'Admin';
-    const isOwnerOrLead = db.prepare(`
-      SELECT 1 FROM projects p WHERE p.id = ? AND p.created_by = ?
-      UNION
-      SELECT 1 FROM team_projects tp JOIN teams t ON tp.team_id = t.id WHERE tp.project_id = ? AND (t.manager_id = ? OR t.created_by = ?)
-    `).get(projectId, req.user.id, projectId, req.user.id, req.user.id);
-    const isExistingCoManager = db.prepare('SELECT 1 FROM project_shares WHERE project_id = ? AND user_id = ?').get(projectId, req.user.id);
-
-    if (!isAdmin && !isOwnerOrLead && !isExistingCoManager) {
-      return res.status(403).json({ message: 'Permission denied. You do not manage this project.' });
-    }
-
-    let sharedCount = 0;
-    const targetUsers = [];
-
-    for (const rawId of targetIds) {
-      const targetId = Number(rawId);
-      if (!targetId || targetId === req.user.id) continue;
-
-      const targetUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(targetId);
-      if (!targetUser || !['Manager', 'Admin'].includes(targetUser.role)) continue;
-
-      db.prepare(`
-        INSERT OR IGNORE INTO project_shares (project_id, user_id, shared_by, permission)
-        VALUES (?, ?, ?, 'manage')
-      `).run(Number(projectId), targetId, req.user.id);
-
-      sharedCount++;
-      targetUsers.push(targetUser);
-
-      createNotification({
-        userId: targetId,
-        senderId: req.user.id,
-        senderName: req.user.name,
-        type: 'PROJECT_SHARED',
-        entityType: 'Project',
-        entityId: Number(projectId),
-        title: 'Project Shared with You (Co-Manager)',
-        message: `${req.user.name} shared project "${project.name}" with you. You now have full management powers over this project.`
-      });
-
-      logSystemAction({
-        userId: req.user.id,
-        userName: req.user.name,
-        role: req.user.role,
-        action: 'SHARE_PROJECT',
-        entityType: 'Project',
-        entityId: Number(projectId),
-        details: `Shared project "${project.name}" with manager ${targetUser.name} (${targetUser.email}) as co-manager`
-      });
-    }
-
-    res.json({
-      message: `Project "${project.name}" shared with ${sharedCount} manager(s) successfully.`,
-      sharedCount,
-      targetUsers
-    });
-  } catch (err) {
-    console.error('Failed to share project:', err);
-    res.status(500).json({ message: 'Failed to share project' });
-  }
-});
-
-// REVOKE / UNSHARE PROJECT from a manager
-router.delete('/projects/:projectId/share/:userId', authenticateUser, (req, res) => {
-  try {
-    const { projectId, userId } = req.params;
-    const targetId = Number(userId);
-
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
-    if (!project) return res.status(404).json({ message: 'Project not found.' });
-
-    const targetUser = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(targetId);
-
-    // Permission check
-    const isAdmin = req.user.role === 'Admin';
-    const isSelf = req.user.id === targetId;
-    const isOwnerOrLead = db.prepare(`
-      SELECT 1 FROM projects p WHERE p.id = ? AND p.created_by = ?
-      UNION
-      SELECT 1 FROM team_projects tp JOIN teams t ON tp.team_id = t.id WHERE tp.project_id = ? AND (t.manager_id = ? OR t.created_by = ?)
-    `).get(projectId, req.user.id, projectId, req.user.id, req.user.id);
-    const isSharer = db.prepare('SELECT 1 FROM project_shares WHERE project_id = ? AND user_id = ? AND shared_by = ?').get(projectId, targetId, req.user.id);
-
-    if (!isAdmin && !isSelf && !isOwnerOrLead && !isSharer) {
-      return res.status(403).json({ message: 'Permission denied to remove co-manager from this project.' });
-    }
-
-    db.prepare('DELETE FROM project_shares WHERE project_id = ? AND user_id = ?').run(projectId, targetId);
-
-    logSystemAction({
-      userId: req.user.id,
-      userName: req.user.name,
-      role: req.user.role,
-      action: 'REVOKE_PROJECT_SHARE',
-      entityType: 'Project',
-      entityId: Number(projectId),
-      details: `Revoked co-manager access of ${targetUser ? targetUser.name : `User ${targetId}`} for project "${project.name}"`
-    });
-
-    res.json({ message: `Co-management access revoked successfully.` });
-  } catch (err) {
-    console.error('Failed to revoke project share:', err);
-    res.status(500).json({ message: 'Failed to revoke project share' });
-  }
-});
-
 export default router;
+

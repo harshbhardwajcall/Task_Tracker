@@ -143,36 +143,51 @@ function ToastItem({ toast, onDismiss, onOpen }) {
 }
 
 export default function SideNotificationToasts() {
-  const { toasts, dismissToast, openTaskFromNotification, browserPermission, requestBrowserPermission } = useNotifications();
+  const { browserPermission, requestBrowserPermission, testWindowsNotification } = useNotifications();
+  const [dismissedBanner, setDismissedBanner] = useState(false);
+
+  // If permission is already granted or banner was dismissed for this session, render nothing
+  if (browserPermission === 'granted' || dismissedBanner) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm sm:max-w-md pointer-events-none">
-      {/* Optional One-Click Permission Request Banner */}
+      {/* WhatsApp-Style Windows Desktop Notifications Banner */}
       {browserPermission === 'default' && (
-        <div className="pointer-events-auto p-2.5 rounded-xl bg-slate-900/90 dark:bg-zinc-900/90 border border-sky-500/30 text-white shadow-xl backdrop-blur-md flex items-center justify-between gap-3 text-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="text-[11px]">Enable browser tab & desktop alerts?</span>
+        <div className="pointer-events-auto p-3.5 rounded-2xl bg-slate-900/95 dark:bg-zinc-900/95 border border-sky-500/40 text-white shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 text-xs animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 shrink-0">
+              <Bell className="w-4 h-4 animate-bounce" />
+            </div>
+            <div className="min-w-0">
+              <h5 className="text-[12px] font-bold text-white leading-tight">
+                Enable Windows Notifications
+              </h5>
+              <p className="text-[10px] text-slate-300 dark:text-neutral-400 mt-0.5 leading-snug">
+                Receive real-time desktop alerts like WhatsApp when tasks are updated.
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={requestBrowserPermission}
-            className="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold transition cursor-pointer shadow-sm shrink-0"
-          >
-            Enable Alerts
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={requestBrowserPermission}
+              className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition cursor-pointer shadow-md active:scale-95 shrink-0"
+            >
+              Turn On
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissedBanner(true)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+              title="Later"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Floating Notification Toasts */}
-      {toasts.map((toast) => (
-        <ToastItem
-          key={toast.toastId || toast.id}
-          toast={toast}
-          onDismiss={dismissToast}
-          onOpen={openTaskFromNotification}
-        />
-      ))}
     </div>
   );
 }

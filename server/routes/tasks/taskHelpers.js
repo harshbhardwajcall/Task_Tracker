@@ -20,9 +20,21 @@ const storage = multer.diskStorage({
   }
 });
 
+const DANGEROUS_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.bash', '.php', '.phtml', '.cgi',
+  '.pl', '.html', '.htm', '.js', '.mjs', '.vbs', '.scr', '.jar', '.dll', '.com'
+]);
+
 export const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB maximum upload limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB maximum upload limit
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (DANGEROUS_EXTENSIONS.has(ext)) {
+      return cb(new Error(`File extension "${ext}" is restricted for security reasons.`));
+    }
+    cb(null, true);
+  }
 });
 
 // Helper function to safely delete physical attachment files from disk
@@ -53,7 +65,11 @@ export function syncOverdueStatus() {
     SELECT t.id, t.task_id, t.title, t.status, t.due_date, u.email as assignee_email, u.name as assignee_name
     FROM tasks t
     LEFT JOIN users u ON t.assigned_to = u.id
-    WHERE t.due_date < ? AND t.status NOT IN ('Completed', 'Overdue')
+    WHERE t.due_date IS NOT NULL 
+      AND t.due_date != '' 
+      AND t.due_date < ? 
+      AND t.status NOT IN ('Completed', 'Overdue')
+      AND t.deleted_at IS NULL
   `).all(today);
 
   const updateStmt = db.prepare("UPDATE tasks SET status = 'Overdue', last_updated = CURRENT_TIMESTAMP WHERE id = ?");

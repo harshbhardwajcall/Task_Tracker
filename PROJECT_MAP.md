@@ -71,7 +71,6 @@ Task_Tracker/
 │   ├── index.js                   # Server entry point, middleware & route mounting
 │   ├── db/
 │   │   ├── index.js               # Database connection, schemas, and live schema migrations
-│   │   ├── seed.js                # Default seed generator for demo teams & departments
 │   │   └── tracker.db             # Binary SQLite database file
 │   ├── middleware/                # Auth & rate-limiting middleware
 │   ├── routes/
@@ -359,7 +358,7 @@ All modals are exported via `src/components/index.js` and render via React Porta
   ```
 - **Database File:**
   - Located at `server/db/tracker.db`.
-  - To inspect or reset, check `server/db/index.js` or run `node server/db/seed.js`.
+  - Schema initialization and automatic admin bootstrap are handled by `server/db/index.js`.
 - **Primary API Client:**
   - Import `api` from `src/services/api.js`.
   - All calls automatically inject `Authorization: Bearer <token>` and `X-User-Id`.

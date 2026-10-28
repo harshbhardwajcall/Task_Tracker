@@ -1,21 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
-import Login from './pages/Login';
+import { useNotifications } from './context/NotificationContext';
 import { Navbar, TopNav, CreateTaskModal, TaskDetailsModal } from './components';
 import SideNotificationToasts from './components/ui/SideNotificationToasts';
-import { useNotifications } from './context/NotificationContext';
-import AdminView from './pages/AdminView';
-import AdminSettingsView from './pages/AdminSettingsView';
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import DirectoryView from './pages/DirectoryView';
-import RecycleBinView from './pages/RecycleBinView';
-import ManagerView from './pages/ManagerView';
-import SelfLogsView from './pages/SelfLogsView';
-import AuditLogsView from './pages/AuditLogsView';
-import ManagerControlView from './pages/ManagerControlView';
-import ReportsView from './pages/ReportsView';
-import UserProfileView from './pages/UserProfileView';
-import MyTeamView from './pages/MyTeamView';
+
+// Auth Section
+import { Login } from './pages/auth';
+
+// Admin Section Views
+import {
+  AdminView,
+  AdminSettingsView,
+  AuditLogsView,
+  RecycleBinView
+} from './pages/admin';
+
+// Manager Section Views
+import {
+  ManagerView,
+  ManagerControlView,
+  MyTeamView
+} from './pages/manager';
+
+// Employee Section Views
+import {
+  EmployeeDashboard,
+  SelfLogsView
+} from './pages/employee';
+
+// Shared / General Organization Views
+import {
+  DirectoryView,
+  ReportsView,
+  UserProfileView
+} from './pages/shared';
 
 export default function App() {
   const { user, loading } = useAuth();

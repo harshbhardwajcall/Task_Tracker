@@ -47,9 +47,97 @@ export function NotificationProvider({ children }) {
   );
 
   // Keep track of previously seen notification IDs to detect brand-new arrivals
+  // Keep track of previously seen notification IDs to detect brand-new arrivals
   const seenIdsRef = useRef(new Set());
   const initialLoadRef = useRef(true);
   const titleIntervalRef = useRef(null);
+
+  // Register Service Worker for native Windows OS Notifications
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          // SW registered successfully
+        })
+        .catch((err) => {
+          console.warn('Service Worker registration skipped or failed:', err);
+        });
+
+      // Handle message from Service Worker when user clicks Windows OS notification
+      const handleMessage = (event) => {
+        if (event.data?.type === 'NAVIGATE_TO_TASK' && event.data?.taskId) {
+          setSelectedTaskId(event.data.taskId);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
+  }, []);
+
+  // Dismiss a floating toast (if any)
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Trigger native Windows OS Desktop Notification (just like WhatsApp)
+  const triggerWindowsNotification = useCallback(async (item) => {
+    // 1. Play dual-tone notification chime
+    playNotificationChime();
+
+    // 2. Check if browser supports notifications & permission is granted
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const notifTitle = item.title || 'Task Tracker Alert';
+    const notifBody = (item.sender_name ? `${item.sender_name}: ` : '') + (item.message || 'You have a new update in Task Tracker.');
+    const iconUrl = `${window.location.origin}/notification-icon.png`;
+    const toastTag = `task-tracker-notif-${item.id || Date.now()}`;
+    const taskId = item.entity_type === 'Task' ? item.entity_id : null;
+
+    const notifOptions = {
+      body: notifBody,
+      icon: iconUrl,
+      badge: iconUrl,
+      tag: toastTag,
+      renotify: true,
+      requireInteraction: false,
+      silent: false,
+      data: {
+        taskId: taskId,
+        url: window.location.href
+      }
+    };
+
+    // Method A: Trigger via Service Worker (Best for Windows 10/11 Action Center & background alerts)
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg && reg.showNotification) {
+          await reg.showNotification(notifTitle, notifOptions);
+          return;
+        }
+      } catch (swErr) {
+        console.warn('SW showNotification warning:', swErr);
+      }
+    }
+
+    // Method B: Standard Notification API fallback
+    try {
+      const notif = new Notification(notifTitle, notifOptions);
+      notif.onclick = () => {
+        window.focus();
+        if (taskId) {
+          setSelectedTaskId(taskId);
+        }
+        notif.close();
+      };
+    } catch (err) {
+      console.warn('Native notification display error:', err);
+    }
+  }, []);
 
   // Ask for Browser Notifications Permission
   const requestBrowserPermission = useCallback(async () => {
@@ -57,56 +145,45 @@ export function NotificationProvider({ children }) {
       try {
         const perm = await Notification.requestPermission();
         setBrowserPermission(perm);
+        if (perm === 'granted') {
+          // Immediately send a confirmation Windows notification
+          setTimeout(() => {
+            triggerWindowsNotification({
+              id: 'perm-granted-' + Date.now(),
+              title: 'Windows Notifications Enabled 🔔',
+              sender_name: 'Task Tracker',
+              message: 'You will now receive desktop notifications for tasks and updates just like WhatsApp!'
+            });
+          }, 300);
+        }
         return perm;
       } catch (e) {
         console.warn('Failed to request notification permission:', e);
       }
     }
     return 'denied';
-  }, []);
+  }, [triggerWindowsNotification]);
 
-  // Dismiss a floating toast
-  const dismissToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  // Trigger floating side notification (like WhatsApp) & browser notification
-  const triggerNotificationAlert = useCallback((item) => {
-    // 1. Play audio chime
+  // Test native Windows notification immediately
+  const testWindowsNotification = useCallback(async () => {
     playNotificationChime();
-
-    // 2. Add to side floating toasts (auto-dismisses after 7 seconds)
-    const toastId = item.id || Date.now();
-    const createdAtIso = item.created_at || new Date().toISOString();
-    setToasts((prev) => {
-      // Avoid duplicate toasts
-      if (prev.some((t) => t.id === toastId)) return prev;
-      return [...prev.slice(-3), { ...item, toastId, created_at: createdAtIso }]; // Keep at most 4 simultaneous toasts
-    });
-
-    // 3. Trigger native browser notification if permitted
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        const notif = new Notification(item.title || 'Task Tracker Alert', {
-          body: item.message || 'You have a new update in Task Tracker.',
-          icon: '/Call_Astro_icon.png',
-          badge: '/Call_Astro_icon.png',
-          tag: `task-tracker-notif-${toastId}`,
-          timestamp: new Date(createdAtIso).getTime()
-        });
-
-        notif.onclick = () => {
-          window.focus();
-          if (item.entity_type === 'Task' && item.entity_id) {
-            setSelectedTaskId(item.entity_id);
-          }
-          notif.close();
-        };
-      } catch (err) {
-        // Suppress any OS notification restrictions
-      }
+    let perm = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied';
+    if (perm !== 'granted') {
+      perm = await requestBrowserPermission();
     }
-  }, []);
+    if (perm === 'granted') {
+      await triggerWindowsNotification({
+        id: 'test-' + Date.now(),
+        title: 'Task Tracker • Windows Alert',
+        sender_name: 'System Test',
+        message: 'Windows notifications are active! Real-time alerts will appear on your desktop just like WhatsApp.',
+        entity_type: null,
+        entity_id: null
+      });
+      return true;
+    }
+    return false;
+  }, [requestBrowserPermission, triggerWindowsNotification]);
 
   // Fetch notifications from server
   const fetchNotifications = useCallback(async () => {
@@ -118,11 +195,11 @@ export function NotificationProvider({ children }) {
         setNotifications(incoming);
         setUnreadCount(res.unreadCount || 0);
 
-        // Check for new unread notifications that haven't been shown as side toasts yet
+        // Check for new unread notifications that haven't been shown yet
         if (!initialLoadRef.current) {
           const newUnread = incoming.filter((n) => !n.is_read && !seenIdsRef.current.has(n.id));
           if (newUnread.length > 0) {
-            newUnread.forEach((item) => triggerNotificationAlert(item));
+            newUnread.forEach((item) => triggerWindowsNotification(item));
           }
         } else {
           initialLoadRef.current = false;
@@ -134,9 +211,9 @@ export function NotificationProvider({ children }) {
     } catch (err) {
       console.warn('Notification fetch warning:', err);
     }
-  }, [user, triggerNotificationAlert]);
+  }, [user, triggerWindowsNotification]);
 
-  // Polling: fetch every 10 seconds for real-time responsiveness
+  // Polling: fetch every 4 seconds for instant real-time Windows notifications
   useEffect(() => {
     if (!user) {
       setNotifications([]);
@@ -148,7 +225,7 @@ export function NotificationProvider({ children }) {
     }
 
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000);
+    const interval = setInterval(fetchNotifications, 4000);
 
     // Also fetch immediately when window gets focus
     const handleFocus = () => fetchNotifications();
@@ -289,7 +366,9 @@ export function NotificationProvider({ children }) {
         setSelectedTaskId,
         browserPermission,
         requestBrowserPermission,
-        triggerNotificationAlert
+        triggerWindowsNotification,
+        triggerNotificationAlert: triggerWindowsNotification,
+        testWindowsNotification
       }}
     >
       {children}

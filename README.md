@@ -226,35 +226,34 @@ Task_Tracker/
    ```
    *(Update SMTP mail settings in `.env` if you wish to test email dispatches)*
 
-4. **Seed the Database with Initial Sample Data & Accounts:**
-   ```bash
-   npm run seed
-   ```
-   *This initializes the SQLite database schema and creates demo departments, projects, and users.*
-
-5. **Start the application (Concurrent Frontend & Backend):**
+4. **Start the application (Concurrent Frontend & Backend):**
    ```bash
    npm run dev
    ```
    * Frontend runs on: `http://localhost:5173`
    * Backend API runs on: `http://localhost:5000`
+   * *The database tables and initial administrator account will be initialized automatically on first startup.*
 
-6. **Build for production:**
+5. **Build for production:**
    ```bash
    npm run build
    ```
 
 ---
 
-## 🔑 Default Demo Credentials
+## 🔑 Administrator Credentials
 
-You can use the built-in quick login buttons on the login screen, or log in manually with:
+Initial administrator credentials are configured in your `.env` file:
 
-| Role | Email | Password | Access Level |
+```env
+DEFAULT_ADMIN_EMAIL=admin@company.com
+DEFAULT_ADMIN_PASSWORD=your_secure_password
+```
+
+| Role | Portal Mode | Default Configuration | Notes |
 |---|---|---|---|
-| **Admin** | `admin@company.com` | `password123` | Full access to all modules, directories, settings, and recycle bin |
-| **Employee** | `employee@company.com` | `password123` | Personal dashboard, assigned tasks, and task updates |
-| **Intern** | `intern@company.com` | `password123` | Personal dashboard, assigned intern tasks, and task updates |
+| **Admin** | **Admin Portal** | Defined via `DEFAULT_ADMIN_EMAIL` & `DEFAULT_ADMIN_PASSWORD` in `.env` | Full access to governance, settings, teams, employees & logs |
+| **Employees / Managers** | **Employee Portal** | Created dynamically by Admin via **Admin Settings** | Credentials are assigned or sent via automated email |
 
 ---
 
